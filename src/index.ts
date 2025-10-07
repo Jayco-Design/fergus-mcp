@@ -25,6 +25,8 @@ import { getCustomerToolDefinition, handleGetCustomer } from './tools/get-custom
 import { listCustomersToolDefinition, handleListCustomers } from './tools/list-customers.js';
 import { getSiteToolDefinition, handleGetSite } from './tools/get-site.js';
 import { listSitesToolDefinition, handleListSites } from './tools/list-sites.js';
+import { getUserToolDefinition, handleGetUser } from './tools/get-user.js';
+import { listUsersToolDefinition, handleListUsers } from './tools/list-users.js';
 
 /**
  * Main server setup
@@ -46,11 +48,9 @@ async function main() {
   });
 
   // Verify API connection
-  console.error(`Checking Fergus API health with token: ${config.fergusApiToken.substring(0, 20)}...`);
   const isHealthy = await fergusClient.healthCheck();
   if (!isHealthy) {
     console.error('Failed to connect to Fergus API. Please check your API token and network connection.');
-    console.error(`Token received: ${config.fergusApiToken ? 'YES' : 'NO'}, Base URL: ${config.fergusBaseUrl || 'default'}`);
     process.exit(1);
   }
 
@@ -83,6 +83,8 @@ async function main() {
         listCustomersToolDefinition,
         getSiteToolDefinition,
         listSitesToolDefinition,
+        getUserToolDefinition,
+        listUsersToolDefinition,
       ],
     };
   });
@@ -159,6 +161,19 @@ async function main() {
             pageCursor?: string;
           });
 
+        case 'get-user':
+          return await handleGetUser(fergusClient, args as { userId: string });
+
+        case 'list-users':
+          return await handleListUsers(fergusClient, args as {
+            filterSearchText?: string;
+            pageSize?: number;
+            sortField?: string;
+            sortOrder?: string;
+            filterUserType?: string;
+            filterStatus?: string;
+          });
+
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -178,8 +193,6 @@ async function main() {
   // Start server with stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
-
-  console.error('Fergus MCP Server running on stdio');
 }
 
 // Run the server

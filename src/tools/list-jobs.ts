@@ -31,20 +31,26 @@ export const listJobsToolDefinition = {
         enum: ['asc', 'desc'],
         default: 'desc',
       },
+      pageCursor: {
+        type: 'string',
+        description: 'Pagination cursor for next page',
+        default: '0',
+      },
     },
   },
 };
 
 export async function handleListJobs(
   fergusClient: FergusClient,
-  args: { status?: string; limit?: number; sortField?: string; sortOrder?: string }
+  args: { status?: string; limit?: number; sortField?: string; sortOrder?: string; pageCursor?: string }
 ) {
   const status = args?.status;
   const limit = args?.limit || 50;
   const sortField = args?.sortField || 'createdAt';
   const sortOrder = args?.sortOrder || 'desc';
+  const pageCursor = args?.pageCursor || '0';
 
-  let endpoint = `/jobs?limit=${limit}&sortField=${sortField}&sortOrder=${sortOrder}`;
+  let endpoint = `/jobs?limit=${limit}&sortField=${sortField}&sortOrder=${sortOrder}&pageCursor=${pageCursor}`;
   if (status) {
     endpoint += `&status=${encodeURIComponent(status)}`;
   }
