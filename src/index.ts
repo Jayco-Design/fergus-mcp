@@ -17,6 +17,14 @@ import { FergusClient } from './fergus-client.js';
 // Tool handlers
 import { getJobToolDefinition, handleGetJob } from './tools/get-job.js';
 import { listJobsToolDefinition, handleListJobs } from './tools/list-jobs.js';
+import { getTimeEntryToolDefinition, handleGetTimeEntry } from './tools/get-time-entry.js';
+import { listTimeEntriesToolDefinition, handleListTimeEntries } from './tools/list-time-entries.js';
+import { getQuoteToolDefinition, handleGetQuote } from './tools/get-quote.js';
+import { listQuotesToolDefinition, handleListQuotes } from './tools/list-quotes.js';
+import { getCustomerToolDefinition, handleGetCustomer } from './tools/get-customer.js';
+import { listCustomersToolDefinition, handleListCustomers } from './tools/list-customers.js';
+import { getSiteToolDefinition, handleGetSite } from './tools/get-site.js';
+import { listSitesToolDefinition, handleListSites } from './tools/list-sites.js';
 
 /**
  * Main server setup
@@ -67,6 +75,14 @@ async function main() {
       tools: [
         getJobToolDefinition,
         listJobsToolDefinition,
+        getTimeEntryToolDefinition,
+        listTimeEntriesToolDefinition,
+        getQuoteToolDefinition,
+        listQuotesToolDefinition,
+        getCustomerToolDefinition,
+        listCustomersToolDefinition,
+        getSiteToolDefinition,
+        listSitesToolDefinition,
       ],
     };
   });
@@ -84,6 +100,64 @@ async function main() {
 
         case 'list-jobs':
           return await handleListJobs(fergusClient, args as { status?: string; limit?: number; sortField?: string; sortOrder?: string });
+
+        case 'get-time-entry':
+          return await handleGetTimeEntry(fergusClient, args as { timeEntryId: string });
+
+        case 'list-time-entries':
+          return await handleListTimeEntries(fergusClient, args as {
+            filterUserId?: string;
+            filterJobNo?: string;
+            filterDateFrom?: string;
+            filterDateTo?: string;
+            filterSearchText?: string;
+            filterLockedOnly?: boolean;
+            pageSize?: number;
+            sortField?: string;
+            sortOrder?: string;
+            pageCursor?: string;
+          });
+
+        case 'get-quote':
+          return await handleGetQuote(fergusClient, args as { quoteId: string });
+
+        case 'list-quotes':
+          return await handleListQuotes(fergusClient, args as {
+            filterStatus?: string;
+            createdAfter?: string;
+            modifiedAfter?: string;
+            pageSize?: number;
+            sortField?: string;
+            sortOrder?: string;
+            pageCursor?: string;
+          });
+
+        case 'get-customer':
+          return await handleGetCustomer(fergusClient, args as { customerId: string });
+
+        case 'list-customers':
+          return await handleListCustomers(fergusClient, args as {
+            filterSearchText?: string;
+            pageSize?: number;
+            sortField?: string;
+            sortOrder?: string;
+            pageCursor?: string;
+          });
+
+        case 'get-site':
+          return await handleGetSite(fergusClient, args as { siteId: string });
+
+        case 'list-sites':
+          return await handleListSites(fergusClient, args as {
+            filterSearchText?: string;
+            filterSiteName?: string;
+            filterAddressCity?: string;
+            filterAddressPostalCode?: string;
+            pageSize?: number;
+            sortField?: string;
+            sortOrder?: string;
+            pageCursor?: string;
+          });
 
         default:
           throw new Error(`Unknown tool: ${name}`);
