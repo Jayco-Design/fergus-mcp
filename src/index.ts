@@ -36,9 +36,11 @@ async function main() {
   });
 
   // Verify API connection
+  console.error(`Checking Fergus API health with token: ${config.fergusApiToken.substring(0, 20)}...`);
   const isHealthy = await fergusClient.healthCheck();
   if (!isHealthy) {
     console.error('Failed to connect to Fergus API. Please check your API token and network connection.');
+    console.error(`Token received: ${config.fergusApiToken ? 'YES' : 'NO'}, Base URL: ${config.fergusBaseUrl || 'default'}`);
     process.exit(1);
   }
 
@@ -78,7 +80,7 @@ async function main() {
         },
         {
           name: 'list-jobs',
-          description: 'List all jobs with optional filtering',
+          description: 'List all jobs with optional filtering and sorting',
           inputSchema: {
             type: 'object',
             properties: {
@@ -90,6 +92,17 @@ async function main() {
                 type: 'number',
                 description: 'Maximum number of jobs to return',
                 default: 50,
+              },
+              sortField: {
+                type: 'string',
+                description: 'Field to sort by (e.g., createdAt, lastModified)',
+                default: 'createdAt',
+              },
+              sortOrder: {
+                type: 'string',
+                description: 'Sort order: asc (oldest first) or desc (newest first)',
+                enum: ['asc', 'desc'],
+                default: 'desc',
               },
             },
           },
@@ -125,8 +138,10 @@ async function main() {
         case 'list-jobs': {
           const status = args?.status as string | undefined;
           const limit = (args?.limit as number) || 50;
+          const sortField = (args?.sortField as string) || 'createdAt';
+          const sortOrder = (args?.sortOrder as string) || 'desc';
 
-          let endpoint = `/jobs?limit=${limit}`;
+          let endpoint = `/jobs?limit=${limit}&sortField=${sortField}&sortOrder=${sortOrder}`;
           if (status) {
             endpoint += `&status=${encodeURIComponent(status)}`;
           }

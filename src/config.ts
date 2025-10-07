@@ -4,8 +4,12 @@
 
 import * as dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (only if .env exists, silently)
+// Suppress all output to avoid breaking MCP stdio protocol
+const originalLog = console.log;
+console.log = () => {};
+dotenv.config({ debug: false });
+console.log = originalLog;
 
 export interface Config {
   fergusApiToken: string;

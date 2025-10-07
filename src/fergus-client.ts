@@ -124,8 +124,8 @@ export class FergusClient {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      // Attempt to fetch users as a health check
-      await this.get('/users');
+      // Attempt to fetch jobs as a health check
+      await this.get('/jobs?limit=1');
       return true;
     } catch (error) {
       return false;
