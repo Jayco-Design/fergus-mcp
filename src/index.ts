@@ -36,6 +36,7 @@ import { createCustomerToolDefinition, handleCreateCustomer } from './tools/crea
 import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/update-customer.js';
 import { createSiteToolDefinition, handleCreateSite } from './tools/create-site.js';
 import { updateSiteToolDefinition, handleUpdateSite } from './tools/update-site.js';
+import { updateUserToolDefinition, handleUpdateUser } from './tools/update-user.js';
 
 /**
  * Main server setup
@@ -103,6 +104,7 @@ async function main() {
         updateCustomerToolDefinition,
         createSiteToolDefinition,
         updateSiteToolDefinition,
+        updateUserToolDefinition,
       ],
     };
   });
@@ -264,6 +266,17 @@ async function main() {
             name?: string;
             siteAddress: any;
             postalAddress?: any;
+          });
+
+        case 'update-user':
+          return await handleUpdateUser(fergusClient, args as {
+            userId: number;
+            firstName?: string;
+            lastName?: string;
+            address?: any;
+            payRate?: number;
+            chargeOutRate?: number;
+            contactItems?: any[];
           });
 
         default:

@@ -136,10 +136,10 @@ fergus-mcp/
 - ✅ Proper parameter naming matching Fergus API (e.g., `filterUserId`, `filterJobNo`)
 - ✅ Return data in JSON format for AI consumption
 
-### Phase 3: Action Tools ⏳ IN PROGRESS
+### Phase 3: Action Tools ✅ COMPLETED
 **Goal**: Enable AI to perform actions in Fergus
 
-**Status**: 12 out of 13 action tools implemented and tested
+**Status**: All 13 action tools implemented and tested successfully
 
 #### Tools Implemented:
 
@@ -161,10 +161,10 @@ fergus-mcp/
    - ✅ `create-site` - Add new site with address and contacts
    - ✅ `update-site` - Modify site details
 
-5. **User Operations** ⏳
-   - ⏸️ `update-user` - Update user details (firstName, lastName, address, payRate, chargeOutRate, contactItems)
+5. **User Operations** ✅
+   - ✅ `update-user` - Update user details (firstName, lastName, address, payRate, chargeOutRate, contactItems)
      * Endpoint: PATCH /users/{userId}
-     * Status: Not yet implemented
+     * Status: Implemented and tested
 
 #### Tool Design Principles:
 - Use Zod schemas for strict input validation
@@ -173,14 +173,13 @@ fergus-mcp/
 - Include confirmation messages for successful actions
 - Implement dry-run mode for destructive operations
 
-### Phase 4: Advanced Features
+### Phase 4: Advanced Features ⏳ IN PROGRESS
 
-#### 1. Prompts for Common Workflows
+#### 1. Prompts for Common Workflows ⏳
 Create templated prompts for frequent tasks:
-- `job-creation-assistant`: Guide through job creation
-- `quote-generator`: Help create comprehensive quotes
-- `customer-onboarding`: Structured customer setup
-- `weekly-report`: Generate job status summaries
+- ⏳ `job-creation-assistant`: Guide through job creation (draft → finalized workflow)
+- ⏳ `quote-generator`: Help create comprehensive quotes with sections and line items
+- ⏳ `weekly-report`: Generate job status summaries for a date range
 
 #### 2. Smart Completions
 Implement context-aware completions:
@@ -383,15 +382,16 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 4. ✅ Build first MCP tool (read-only resource)
 5. ✅ Test with Claude Desktop (requires Fergus API token)
 6. ✅ Phase 2 Read Operations (customers, quotes, sites, time entries, users)
-7. ⏭️ Begin Phase 3 (Action Tools)
+7. ✅ Phase 3 Action Tools (jobs, quotes, customers, sites, users)
+8. ⏭️ Begin Phase 4 (Advanced Features)
 
 ---
 
-**Document Version**: 2.5
+**Document Version**: 2.6
 **Last Updated**: 2025-10-07
-**Status**: Phase 3 Nearly Complete - 12/13 Action Tools Implemented
+**Status**: Phase 3 Complete - All 13 Action Tools Implemented
 
-**Next Engineer: Optionally implement update-user tool or proceed to Phase 4 (Advanced Features)**
+**Next Engineer: Proceed to Phase 4 (Advanced Features)**
 
 ## Known Issues
 
@@ -414,6 +414,7 @@ default:  // "active"
 **Status**: Reported to Fergus team for fix in partner API.
 
 ## Changelog
+- v2.6: **Phase 3 COMPLETED** - Implemented final action tool: update-user (PATCH /users/{userId}) with support for firstName, lastName, address (7 fields), payRate, chargeOutRate, and contactItems. All 13 action tools now complete. Ready for Phase 4.
 - v2.5: **Phase 3 nearly complete** - Implemented 9 additional action tools: create-quote, update-quote (with correct schema requiring EITHER isLabour OR salesAccountId), create-customer, update-customer, create-site, update-site. Added PATCH method to FergusClient. All tools tested successfully via MCP. Only update-user remains unimplemented.
 - v2.4: **Phase 3 job tools** - Implemented create-job, update-job, and finalize-job action tools. Discovered and documented Fergus API bug where filterStatus=active returns disabled users (requires API fix). MCP server implementation is correct.
 - v2.3: **Pagination bug fix** - Fixed missing `pageCursor` parameter in list-users and list-jobs tools. Pagination now working correctly across all list endpoints. Tested with Fergus MCP server using its own tools (dogfooding).
