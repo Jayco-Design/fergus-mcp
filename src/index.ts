@@ -22,6 +22,7 @@ import { listJobsToolDefinition, handleListJobs } from './tools/list-jobs.js';
 import { getTimeEntryToolDefinition, handleGetTimeEntry } from './tools/get-time-entry.js';
 import { listTimeEntriesToolDefinition, handleListTimeEntries } from './tools/list-time-entries.js';
 import { getQuoteToolDefinition, handleGetQuote } from './tools/get-quote.js';
+import { getQuoteDetailToolDefinition, handleGetQuoteDetail } from './tools/get-quote-detail.js';
 import { listQuotesToolDefinition, handleListQuotes } from './tools/list-quotes.js';
 import { getCustomerToolDefinition, handleGetCustomer } from './tools/get-customer.js';
 import { listCustomersToolDefinition, handleListCustomers } from './tools/list-customers.js';
@@ -34,6 +35,7 @@ import { updateJobToolDefinition, handleUpdateJob } from './tools/update-job.js'
 import { finalizeJobToolDefinition, handleFinalizeJob } from './tools/finalize-job.js';
 import { createQuoteToolDefinition, handleCreateQuote } from './tools/create-quote.js';
 import { updateQuoteToolDefinition, handleUpdateQuote } from './tools/update-quote.js';
+import { updateQuoteVersionToolDefinition, handleUpdateQuoteVersion } from './tools/update-quote-version.js';
 import { createCustomerToolDefinition, handleCreateCustomer } from './tools/create-customer.js';
 import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/update-customer.js';
 import { createSiteToolDefinition, handleCreateSite } from './tools/create-site.js';
@@ -96,6 +98,7 @@ async function main() {
         getTimeEntryToolDefinition,
         listTimeEntriesToolDefinition,
         getQuoteToolDefinition,
+        getQuoteDetailToolDefinition,
         listQuotesToolDefinition,
         getCustomerToolDefinition,
         listCustomersToolDefinition,
@@ -108,6 +111,7 @@ async function main() {
         finalizeJobToolDefinition,
         createQuoteToolDefinition,
         updateQuoteToolDefinition,
+        updateQuoteVersionToolDefinition,
         createCustomerToolDefinition,
         updateCustomerToolDefinition,
         createSiteToolDefinition,
@@ -187,6 +191,9 @@ async function main() {
 
         case 'get-quote':
           return await handleGetQuote(fergusClient, args as { quoteId: string });
+
+        case 'get-quote-detail':
+          return await handleGetQuoteDetail(fergusClient, args as { jobId: string; quoteId: string });
 
         case 'list-quotes':
           return await handleListQuotes(fergusClient, args as {
@@ -276,6 +283,13 @@ async function main() {
           return await handleUpdateQuote(fergusClient, args as {
             jobId: number;
             quoteId: number;
+            sections: any[];
+          });
+
+        case 'update-quote-version':
+          return await handleUpdateQuoteVersion(fergusClient, args as {
+            jobId: number;
+            versionNumber: number;
             sections: any[];
           });
 

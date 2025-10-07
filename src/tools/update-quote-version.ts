@@ -1,13 +1,13 @@
 /**
- * Update Quote Tool
- * Updates an existing quote for a job
+ * Update Quote Version Tool
+ * Updates an existing quote by version number
  */
 
 import { FergusClient } from '../fergus-client.js';
 
-export const updateQuoteToolDefinition = {
-  name: 'update-quote',
-  description: 'Update an existing DRAFT quote. WARNING: This operation REPLACES ALL EXISTING SECTIONS with the sections you provide. If you only want to modify one section, you MUST first fetch the quote using get-quote-detail to get ALL existing sections, then include ALL sections (both modified and unmodified) in your update. The quote must be in draft status (not sent, accepted, or locked) to be updated. To modify a sent/locked quote, create a new quote version instead. IMPORTANT: Line items must include EITHER isLabour OR salesAccountId, but NOT BOTH.',
+export const updateQuoteVersionToolDefinition = {
+  name: 'update-quote-version',
+  description: 'Update an existing DRAFT quote by version number. WARNING: This operation REPLACES ALL EXISTING SECTIONS with the sections you provide. If you only want to modify one section, you MUST first fetch the quote using get-quote-detail to get ALL existing sections, then include ALL sections (both modified and unmodified) in your update. The quote must be in draft status (not sent, accepted, or locked) to be updated. To modify a sent/locked quote, create a new quote version instead. IMPORTANT: Line items must include EITHER isLabour OR salesAccountId, but NOT BOTH.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -15,9 +15,9 @@ export const updateQuoteToolDefinition = {
         type: 'number',
         description: 'The ID of the job',
       },
-      quoteId: {
+      versionNumber: {
         type: 'number',
-        description: 'The ID of the quote to update',
+        description: 'The version number of the quote to update',
       },
       sections: {
         type: 'array',
@@ -78,24 +78,32 @@ export const updateQuoteToolDefinition = {
         },
       },
     },
-    required: ['jobId', 'quoteId', 'sections'],
+    required: ['jobId', 'versionNumber', 'sections'],
   },
 };
 
-export async function handleUpdateQuote(
+export async function handleUpdateQuoteVersion(
   fergusClient: FergusClient,
   args: {
     jobId: number;
-    quoteId: number;
+    versionNumber: number;
     sections: any[];
   }
 ) {
-  const { jobId, quoteId, sections } = args;
+  const { jobId, versionNumber, sections } = args;
 
   try {
-    // Fetch existing quote to preserve title and description
+    // First, fetch all quotes for the job to find the one with matching version number
+    const quotesResponse: any = await fergusClient.get(`/jobs/${jobId}/quotes`);
+    const targetQuote = quotesResponse.data.find((q: any) => q.versionNumber === versionNumber);
+
+    if (!targetQuote) {
+      throw new Error(`Quote version ${versionNumber} not found for job ${jobId}`);
+    }
+
+    // Fetch the full quote details to preserve title and description
     // (API bug workaround: the DAO fails if title/description are undefined)
-    const existingQuote: any = await fergusClient.get(`/jobs/${jobId}/quotes/${quoteId}`);
+    const existingQuote: any = await fergusClient.get(`/jobs/${jobId}/quotes/${targetQuote.id}`);
 
     const requestBody = {
       title: existingQuote.data.title || '',
@@ -104,7 +112,7 @@ export async function handleUpdateQuote(
     };
 
     const quote = await fergusClient.put(
-      `/jobs/${jobId}/quotes/${quoteId}`,
+      `/jobs/${jobId}/quotes/version/${versionNumber}`,
       requestBody
     );
 
@@ -120,7 +128,7 @@ export async function handleUpdateQuote(
     // Provide clearer error message for draft-only restriction
     if (error.message?.includes('must be a draft')) {
       throw new Error(
-        `Cannot update quote ${quoteId}: The quote must be in DRAFT status to be updated. ` +
+        `Cannot update quote version ${versionNumber}: The quote must be in DRAFT status to be updated. ` +
         `This quote has been sent, accepted, or locked. To make changes, create a new quote version using create-quote instead.`
       );
     }

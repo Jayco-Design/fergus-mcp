@@ -139,7 +139,7 @@ fergus-mcp/
 ### Phase 3: Action Tools ✅ COMPLETED
 **Goal**: Enable AI to perform actions in Fergus
 
-**Status**: All 13 action tools implemented and tested successfully
+**Status**: All 16 action tools implemented and tested successfully (includes 3 quote detail/update tools)
 
 #### Tools Implemented:
 
@@ -151,7 +151,14 @@ fergus-mcp/
 2. **Quote Management** ✅
    - ✅ `create-quote` - Create quote for a job with sections and line items
      * Important: Line items must use EITHER `isLabour` OR `salesAccountId`, but NOT BOTH
-   - ✅ `update-quote` - Update existing quote sections
+   - ✅ `get-quote-detail` - Get comprehensive quote details including all sections and line items
+   - ✅ `update-quote` - Update existing DRAFT quote sections (by quote ID)
+     * WARNING: Replaces ALL sections - must fetch all existing sections first to avoid data loss
+     * Implements workaround for API bug (must preserve title/description)
+   - ✅ `update-quote-version` - Update existing DRAFT quote sections (by version number)
+     * WARNING: Replaces ALL sections - must fetch all existing sections first to avoid data loss
+     * Implements workaround for API bug (must preserve title/description)
+     * Note: No GET endpoint exists for version lookups, tool fetches all quotes and finds matching version
 
 3. **Customer Management** ✅
    - ✅ `create-customer` - Add new customer with contact information
@@ -394,9 +401,9 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 
 ---
 
-**Document Version**: 2.7
+**Document Version**: 2.8
 **Last Updated**: 2025-10-07
-**Status**: Phase 4.1 Complete - Prompts for Common Workflows Implemented
+**Status**: Phase 3 Enhanced - Advanced Quote Management Tools Implemented
 
 **Next Engineer: Continue Phase 4 (Smart Completions, Notifications, Batch Operations) or focus on testing & documentation**
 
@@ -420,7 +427,28 @@ default:  // "active"
 
 **Status**: Reported to Fergus team for fix in partner API.
 
+### Fergus API Bug: Update Quote Requires Title/Description
+**Issue**: The PUT endpoints for updating quotes (`/jobs/{jobId}/quotes/{quoteId}` and `/jobs/{jobId}/quotes/version/{versionNumber}`) fail with SQL syntax error when `title` or `description` are undefined.
+
+**Root Cause**: In `/fergus-partner-api/src/routes/quotes/dao/index.ts:59-68`, the update operation always tries to set `title` and `description` fields. When both are undefined, Kysely generates an empty SET clause: `UPDATE rp_quote SET  WHERE...` which is invalid SQL.
+
+**Workaround Implemented**: The MCP tools (`update-quote` and `update-quote-version`) now fetch the existing quote first to preserve the title and description fields before updating.
+
+**API Design Issue**: The schema allows `title` and `description` to be optional (`Type.Optional(Type.String())`), but the DAO code doesn't handle the case where they're not provided.
+
+**Status**: Workaround implemented in MCP server. API should be fixed to only update fields that are actually provided in the request body.
+
+### Missing API Endpoint: GET Quote by Version
+**Issue**: The Swagger documentation shows `GET /jobs/{jobId}/quotes/version/{versionNumber}`, but this endpoint doesn't exist in the partner API code.
+
+**Impact**: The `update-quote-version` tool must fetch all quotes for a job and find the matching version number, rather than directly fetching by version.
+
+**Workaround Implemented**: The tool uses `GET /jobs/{jobId}/quotes` to fetch all quotes, then finds the quote with the matching version number.
+
+**Status**: Endpoint should be implemented to match the PUT endpoint that exists at this path.
+
 ## Changelog
+- v2.8: **Phase 3 Enhanced - Quote Management Tools** - Added 3 new quote tools bringing total to 16 action tools: `get-quote-detail` (comprehensive quote data with all sections/line items), `update-quote` (update by quote ID), and `update-quote-version` (update by version number). Discovered and documented two Fergus API bugs: (1) update quote endpoints require title/description or generate invalid SQL, (2) missing GET endpoint for quote by version number. Implemented workarounds for both bugs. Added prominent warnings to update tools about replacing ALL sections to prevent data loss.
 - v2.7: **Phase 4.1 COMPLETED** - Implemented MCP Prompts for common workflows: job-creation-assistant (guides through draft→finalized workflow), quote-generator (helps structure quotes with sections/line items), and weekly-report (generates comprehensive status reports). Prompts capability added to server with ListPromptsRequestSchema and GetPromptRequestSchema handlers.
 - v2.6: **Phase 3 COMPLETED** - Implemented final action tool: update-user (PATCH /users/{userId}) with support for firstName, lastName, address (7 fields), payRate, chargeOutRate, and contactItems. All 13 action tools now complete. Ready for Phase 4.
 - v2.5: **Phase 3 nearly complete** - Implemented 9 additional action tools: create-quote, update-quote (with correct schema requiring EITHER isLabour OR salesAccountId), create-customer, update-customer, create-site, update-site. Added PATCH method to FergusClient. All tools tested successfully via MCP. Only update-user remains unimplemented.
