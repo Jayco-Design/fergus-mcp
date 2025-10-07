@@ -10,11 +10,13 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadConfig } from './config.js';
 import { FergusClient } from './fergus-client.js';
+
+// Tool handlers
+import { getJobToolDefinition, handleGetJob } from './tools/get-job.js';
+import { listJobsToolDefinition, handleListJobs } from './tools/list-jobs.js';
 
 /**
  * Main server setup
@@ -52,7 +54,6 @@ async function main() {
     },
     {
       capabilities: {
-        resources: {},
         tools: {},
       },
     }
@@ -64,49 +65,8 @@ async function main() {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
-        {
-          name: 'get-job',
-          description: 'Get details for a specific job by ID',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              jobId: {
-                type: 'string',
-                description: 'The ID of the job to retrieve',
-              },
-            },
-            required: ['jobId'],
-          },
-        },
-        {
-          name: 'list-jobs',
-          description: 'List all jobs with optional filtering and sorting',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              status: {
-                type: 'string',
-                description: 'Filter by job status (e.g., active, completed)',
-              },
-              limit: {
-                type: 'number',
-                description: 'Maximum number of jobs to return',
-                default: 50,
-              },
-              sortField: {
-                type: 'string',
-                description: 'Field to sort by (e.g., createdAt, lastModified)',
-                default: 'createdAt',
-              },
-              sortOrder: {
-                type: 'string',
-                description: 'Sort order: asc (oldest first) or desc (newest first)',
-                enum: ['asc', 'desc'],
-                default: 'desc',
-              },
-            },
-          },
-        },
+        getJobToolDefinition,
+        listJobsToolDefinition,
       ],
     };
   });
@@ -119,43 +79,11 @@ async function main() {
 
     try {
       switch (name) {
-        case 'get-job': {
-          const jobId = args?.jobId as string;
-          if (!jobId) {
-            throw new Error('jobId is required');
-          }
-          const job = await fergusClient.get(`/jobs/${jobId}`);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(job, null, 2),
-              },
-            ],
-          };
-        }
+        case 'get-job':
+          return await handleGetJob(fergusClient, args as { jobId?: string });
 
-        case 'list-jobs': {
-          const status = args?.status as string | undefined;
-          const limit = (args?.limit as number) || 50;
-          const sortField = (args?.sortField as string) || 'createdAt';
-          const sortOrder = (args?.sortOrder as string) || 'desc';
-
-          let endpoint = `/jobs?limit=${limit}&sortField=${sortField}&sortOrder=${sortOrder}`;
-          if (status) {
-            endpoint += `&status=${encodeURIComponent(status)}`;
-          }
-
-          const jobs = await fergusClient.get(endpoint);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(jobs, null, 2),
-              },
-            ],
-          };
-        }
+        case 'list-jobs':
+          return await handleListJobs(fergusClient, args as { status?: string; limit?: number; sortField?: string; sortOrder?: string });
 
         default:
           throw new Error(`Unknown tool: ${name}`);
@@ -170,72 +98,6 @@ async function main() {
         ],
         isError: true,
       };
-    }
-  });
-
-  /**
-   * Handler for listing available resources
-   */
-  server.setRequestHandler(ListResourcesRequestSchema, async () => {
-    return {
-      resources: [
-        {
-          uri: 'fergus://jobs',
-          name: 'All Jobs',
-          description: 'List of all jobs in Fergus',
-          mimeType: 'application/json',
-        },
-        {
-          uri: 'fergus://customers',
-          name: 'All Customers',
-          description: 'List of all customers in Fergus',
-          mimeType: 'application/json',
-        },
-      ],
-    };
-  });
-
-  /**
-   * Handler for reading resources
-   */
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const { uri } = request.params;
-
-    try {
-      switch (uri) {
-        case 'fergus://jobs': {
-          const jobs = await fergusClient.get('/jobs');
-          return {
-            contents: [
-              {
-                uri,
-                mimeType: 'application/json',
-                text: JSON.stringify(jobs, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'fergus://customers': {
-          const customers = await fergusClient.get('/customers');
-          return {
-            contents: [
-              {
-                uri,
-                mimeType: 'application/json',
-                text: JSON.stringify(customers, null, 2),
-              },
-            ],
-          };
-        }
-
-        default:
-          throw new Error(`Unknown resource: ${uri}`);
-      }
-    } catch (error) {
-      throw new Error(
-        `Failed to read resource ${uri}: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
     }
   });
 
