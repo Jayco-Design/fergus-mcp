@@ -113,6 +113,16 @@ export class FergusClient {
   }
 
   /**
+   * PATCH request to Fergus API
+   */
+  async patch<T>(endpoint: string, data: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
    * DELETE request to Fergus API
    */
   async delete<T>(endpoint: string): Promise<T> {

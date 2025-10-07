@@ -14,7 +14,7 @@ The Fergus API documentation is available at:
 - **Interactive Docs**: https://api.fergus.com/docs
 - **OpenAPI JSON**: https://api.fergus.com/docs/json
 
-The OpenAPI specification provides complete endpoint details including paths, methods, parameters, request/response schemas, and authentication requirements.
+The OpenAPI specification provides complete endpoint details including paths, methods, parameters, request/response schemas, and authentication requirements. You should only need to fetch this once per session.
 
 ## About Model Context Protocol (MCP)
 
@@ -136,33 +136,35 @@ fergus-mcp/
 - ✅ Proper parameter naming matching Fergus API (e.g., `filterUserId`, `filterJobNo`)
 - ✅ Return data in JSON format for AI consumption
 
-### Phase 3: Action Tools
+### Phase 3: Action Tools ⏳ IN PROGRESS
 **Goal**: Enable AI to perform actions in Fergus
 
-#### Tools to Implement:
+**Status**: 12 out of 13 action tools implemented and tested
 
-1. **Job Management**
-   - `create-job`: Create a new job
-   - `update-job`: Update existing draft job
-   - `get-job-details`: Fetch comprehensive job information
+#### Tools Implemented:
 
-2. **Quote Management**
-   - `create-quote`: Create quote for a job
-   - `list-quotes`: Search and filter quotes
+1. **Job Management** ✅
+   - ✅ `create-job` - Create a new job (draft or finalized)
+   - ✅ `update-job` - Update existing draft job
+   - ✅ `finalize-job` - Convert draft job to active status
 
-3. **Customer Management**
-   - `create-customer`: Add new customer
-   - `update-customer`: Modify customer details
-   - `search-customers`: Find customers by various criteria
+2. **Quote Management** ✅
+   - ✅ `create-quote` - Create quote for a job with sections and line items
+     * Important: Line items must use EITHER `isLabour` OR `salesAccountId`, but NOT BOTH
+   - ✅ `update-quote` - Update existing quote sections
 
-4. **Site Management**
-   - `create-site`: Add new site
-   - `update-site`: Modify site details
-   - `link-site-to-customer`: Associate site with customer
+3. **Customer Management** ✅
+   - ✅ `create-customer` - Add new customer with contact information
+   - ✅ `update-customer` - Modify customer details
 
-5. **User Operations**
-   - `update-user`: Update user details (firstName, lastName, address, payRate, chargeOutRate, contactItems)
+4. **Site Management** ✅
+   - ✅ `create-site` - Add new site with address and contacts
+   - ✅ `update-site` - Modify site details
+
+5. **User Operations** ⏳
+   - ⏸️ `update-user` - Update user details (firstName, lastName, address, payRate, chargeOutRate, contactItems)
      * Endpoint: PATCH /users/{userId}
+     * Status: Not yet implemented
 
 #### Tool Design Principles:
 - Use Zod schemas for strict input validation
@@ -385,11 +387,11 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 
 ---
 
-**Document Version**: 2.4
+**Document Version**: 2.5
 **Last Updated**: 2025-10-07
-**Status**: Phase 3 In Progress - Job Action Tools Complete
+**Status**: Phase 3 Nearly Complete - 12/13 Action Tools Implemented
 
-**Next Engineer: Continue Phase 3 - Implement remaining action tools (quotes, customers, sites, users)**
+**Next Engineer: Optionally implement update-user tool or proceed to Phase 4 (Advanced Features)**
 
 ## Known Issues
 
@@ -412,6 +414,7 @@ default:  // "active"
 **Status**: Reported to Fergus team for fix in partner API.
 
 ## Changelog
+- v2.5: **Phase 3 nearly complete** - Implemented 9 additional action tools: create-quote, update-quote (with correct schema requiring EITHER isLabour OR salesAccountId), create-customer, update-customer, create-site, update-site. Added PATCH method to FergusClient. All tools tested successfully via MCP. Only update-user remains unimplemented.
 - v2.4: **Phase 3 job tools** - Implemented create-job, update-job, and finalize-job action tools. Discovered and documented Fergus API bug where filterStatus=active returns disabled users (requires API fix). MCP server implementation is correct.
 - v2.3: **Pagination bug fix** - Fixed missing `pageCursor` parameter in list-users and list-jobs tools. Pagination now working correctly across all list endpoints. Tested with Fergus MCP server using its own tools (dogfooding).
 - v2.2: **Phase 2 COMPLETED** - Implemented user tools (list-users, get-user). All 10 read-only tools now complete: jobs, time entries, quotes, customers, sites, and users. Full filtering support including user type (contractor, field_worker, apprentice, tradesman, advisor, full_user, time_sheet_only) and status (active, disabled, invited). Project successfully builds and is ready for Phase 3 Action Tools.

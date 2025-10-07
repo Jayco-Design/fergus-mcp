@@ -30,6 +30,12 @@ import { listUsersToolDefinition, handleListUsers } from './tools/list-users.js'
 import { createJobToolDefinition, handleCreateJob } from './tools/create-job.js';
 import { updateJobToolDefinition, handleUpdateJob } from './tools/update-job.js';
 import { finalizeJobToolDefinition, handleFinalizeJob } from './tools/finalize-job.js';
+import { createQuoteToolDefinition, handleCreateQuote } from './tools/create-quote.js';
+import { updateQuoteToolDefinition, handleUpdateQuote } from './tools/update-quote.js';
+import { createCustomerToolDefinition, handleCreateCustomer } from './tools/create-customer.js';
+import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/update-customer.js';
+import { createSiteToolDefinition, handleCreateSite } from './tools/create-site.js';
+import { updateSiteToolDefinition, handleUpdateSite } from './tools/update-site.js';
 
 /**
  * Main server setup
@@ -91,6 +97,12 @@ async function main() {
         createJobToolDefinition,
         updateJobToolDefinition,
         finalizeJobToolDefinition,
+        createQuoteToolDefinition,
+        updateQuoteToolDefinition,
+        createCustomerToolDefinition,
+        updateCustomerToolDefinition,
+        createSiteToolDefinition,
+        updateSiteToolDefinition,
       ],
     };
   });
@@ -203,6 +215,56 @@ async function main() {
 
         case 'finalize-job':
           return await handleFinalizeJob(fergusClient, args as { jobId: number });
+
+        case 'create-quote':
+          return await handleCreateQuote(fergusClient, args as {
+            jobId: number;
+            title: string;
+            description?: string;
+            dueDays: number;
+            sections: any[];
+          });
+
+        case 'update-quote':
+          return await handleUpdateQuote(fergusClient, args as {
+            jobId: number;
+            quoteId: number;
+            sections: any[];
+          });
+
+        case 'create-customer':
+          return await handleCreateCustomer(fergusClient, args as {
+            customerFullName: string;
+            mainContact: any;
+            physicalAddress?: any;
+            postalAddress?: any;
+          });
+
+        case 'update-customer':
+          return await handleUpdateCustomer(fergusClient, args as {
+            customerId: number;
+            customerFullName: string;
+            mainContact: any;
+            physicalAddress?: any;
+            postalAddress?: any;
+          });
+
+        case 'create-site':
+          return await handleCreateSite(fergusClient, args as {
+            name?: string;
+            defaultContact: any;
+            billingContact?: any;
+            siteAddress: any;
+            postalAddress?: any;
+          });
+
+        case 'update-site':
+          return await handleUpdateSite(fergusClient, args as {
+            siteId: number;
+            name?: string;
+            siteAddress: any;
+            postalAddress?: any;
+          });
 
         default:
           throw new Error(`Unknown tool: ${name}`);
