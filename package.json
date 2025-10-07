@@ -1,13 +1,36 @@
 {
   "name": "fergus-mcp",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Model Context Protocol server for the Fergus API",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "fergus-mcp": "dist/index.js"
+  },
   "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepare": "pnpm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "fergus",
+    "ai",
+    "claude"
+  ],
   "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.18.0"
+  "license": "MIT",
+  "packageManager": "pnpm@10.18.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.19.1",
+    "dotenv": "^17.2.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
 }
