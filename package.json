@@ -11,7 +11,9 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http-server.ts",
+    "dev:oauth": "tsx src/http-oauth-server.ts",
     "start:http": "node dist/http-server.js",
+    "start:oauth": "node dist/http-oauth-server.js",
     "prepare": "pnpm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -30,12 +32,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.7.0",

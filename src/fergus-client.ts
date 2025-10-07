@@ -4,7 +4,8 @@
  */
 
 export interface FergusClientConfig {
-  apiToken: string;
+  apiToken?: string;
+  tokenProvider?: () => Promise<string | null>;
   baseUrl?: string;
 }
 
@@ -20,11 +21,17 @@ export class FergusAPIError extends Error {
 }
 
 export class FergusClient {
-  private apiToken: string;
+  private apiToken?: string;
+  private tokenProvider?: () => Promise<string | null>;
   private baseUrl: string;
 
   constructor(config: FergusClientConfig) {
+    if (!config.apiToken && !config.tokenProvider) {
+      throw new Error('Either apiToken or tokenProvider must be provided');
+    }
+
     this.apiToken = config.apiToken;
+    this.tokenProvider = config.tokenProvider;
     this.baseUrl = config.baseUrl || 'https://api.fergus.com';
   }
 
@@ -37,8 +44,21 @@ export class FergusClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    // Get token from provider if available, otherwise use static token
+    let token: string | undefined = this.apiToken;
+    if (this.tokenProvider) {
+      const providedToken = await this.tokenProvider();
+      if (!providedToken) {
+        throw new FergusAPIError(
+          'No valid access token available. Please re-authenticate.',
+          401
+        );
+      }
+      token = providedToken;
+    }
+
     const headers = new Headers(options.headers);
-    headers.set('Authorization', `Bearer ${this.apiToken}`);
+    headers.set('Authorization', `Bearer ${token}`);
     headers.set('Content-Type', 'application/json');
 
     try {

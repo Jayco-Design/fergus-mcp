@@ -197,148 +197,112 @@ fergus-mcp/
 
 ---
 
-## Phase 2: OAuth Integration ⏳ NOT STARTED
-**Goal**: Implement OAuth 2.0 authentication with Fergus API
+## Phase 2: OAuth Integration ✅ COMPLETED
+**Goal**: Implement OAuth 2.0 authentication with AWS Cognito compatible with Claude Desktop
 
 ### Tasks:
 
-#### 2.1: Research Fergus OAuth
-- [ ] Access Fergus API documentation for OAuth endpoints
-- [ ] Document the following:
-  - Authorization URL (e.g., `https://api.fergus.com/oauth/authorize`)
-  - Token exchange URL (e.g., `https://api.fergus.com/oauth/token`)
-  - Required scopes (if any)
-  - Token refresh mechanism
-  - Token expiry behavior
-  - Callback URL requirements
-- [ ] Obtain OAuth client ID and secret from Fergus (Ben will provide)
+#### 2.1: Research Cognito OAuth and MCP Spec
+- [x] Access Cognito API documentation for OAuth endpoints
+- [x] Review MCP specification for OAuth implementation
+- [x] Research Claude Desktop OAuth requirements
+- [x] Document the following:
+  - Authorization URL: `https://auth.fergus.com/oauth2/authorize`
+  - Token exchange URL: `https://auth.fergus.com/oauth2/token`
+  - Revocation URL: `https://auth.fergus.com/oauth2/revoke`
+  - Required scopes: openid, email, profile
+  - Token refresh mechanism via refresh token
+  - Token expiry behavior: expires_in seconds
+  - Callback URL requirements: Must redirect to Claude's callback
+- [x] Obtain OAuth client ID and secret from Fergus (configured in Cognito)
 
 #### 2.2: Update Configuration
-- [ ] Update `.env.example` with OAuth variables:
-  ```
-  # Fergus API OAuth (for remote HTTP server)
-  FERGUS_OAUTH_CLIENT_ID=
-  FERGUS_OAUTH_CLIENT_SECRET=
-  FERGUS_OAUTH_REDIRECT_URI=http://localhost:3000/oauth/callback
-
-  # Server Configuration
-  HTTP_PORT=3000
-  HTTP_HOST=0.0.0.0
-  ALLOWED_ORIGINS=https://claude.ai,https://www.claude.ai
-  ALLOWED_HOSTS=localhost,127.0.0.1
-
-  # Session Storage (optional, for production)
-  # REDIS_URL=redis://localhost:6379
-  ```
-- [ ] Update `src/config.ts`:
-  - Add OAuth config interface
-  - Add environment variable parsing for OAuth settings
-  - Export OAuth configuration
-  - Keep existing PAT config for stdio mode
+- [x] Update `.env.example` with OAuth variables:
+  - Updated redirect URI to Claude's callback: `https://claude.ai/api/mcp/auth_callback`
+  - Added all Cognito configuration variables
+  - Updated port to 3100 (to avoid OrbStack conflict)
+  - Added session storage configuration
+- [x] Update `src/config.ts`:
+  - Added OAuth config interface (OAuthConfig)
+  - Added environment variable parsing for OAuth settings
+  - Exported OAuth configuration via loadOAuthConfig()
+  - Added HTTP OAuth config (HttpOAuthConfig)
+  - Kept existing PAT config for stdio mode
 
 #### 2.3: Implement OAuth Handler
-- [ ] Create `src/auth/oauth-handler.ts`
-  - Implement `generateAuthUrl(state: string): string`
-    - Build authorization URL with client ID, redirect URI, state, scopes
-  - Implement `exchangeCodeForTokens(code: string): Promise<OAuthTokens>`
-    - POST to token exchange endpoint
-    - Return `{ accessToken, refreshToken, expiresIn, tokenType }`
-  - Implement `refreshAccessToken(refreshToken: string): Promise<OAuthTokens>`
-    - POST to token refresh endpoint
-    - Return new tokens
-  - Add error handling for OAuth failures
-  - Add TypeScript interfaces:
-    ```typescript
-    interface OAuthTokens {
-      accessToken: string;
-      refreshToken?: string;
-      expiresIn: number; // seconds
-      tokenType: string; // "Bearer"
-    }
-    ```
+- [x] Create `src/auth/oauth-handler.ts` (already implemented in Phase 1)
+  - ✅ Implemented `generateAuthUrl(state: string): string`
+  - ✅ Implemented `exchangeCodeForTokens(code: string): Promise<OAuthTokens>`
+  - ✅ Implemented `refreshAccessToken(refreshToken: string): Promise<OAuthTokens>`
+  - ✅ Added error handling for OAuth failures
+  - ✅ Added TypeScript interfaces (OAuthTokens, OAuthError)
+  - ✅ Implemented PKCE support (generatePKCE function)
+  - ✅ Implemented state generation (generateState function)
 
 #### 2.4: Implement Token Manager
-- [ ] Create `src/auth/token-manager.ts`
-  - Implement `storeTokens(sessionId: string, tokens: OAuthTokens): void`
-    - Store in memory Map with expiry timestamp
-  - Implement `getAccessToken(sessionId: string): Promise<string | null>`
-    - Check if token exists
-    - Check if expired
-    - If expired, attempt refresh using refresh token
-    - Return valid access token or null
-  - Implement `refreshTokenIfNeeded(sessionId: string): Promise<void>`
-    - Check expiry (refresh if < 5 minutes remaining)
-    - Call OAuth handler's refresh method
-    - Update stored tokens
-  - Implement `deleteTokens(sessionId: string): void`
-    - Remove from storage
-  - Add token encryption (optional but recommended):
-    - Use `crypto` module to encrypt tokens at rest
-    - Store encrypted in Map, decrypt on retrieval
+- [x] Create `src/auth/token-manager.ts` (already implemented in Phase 1)
+  - ✅ Implemented `storeTokens(sessionId: string, tokens: OAuthTokens): void`
+  - ✅ Implemented `getAccessToken(sessionId: string): Promise<string | null>`
+  - ✅ Implemented automatic token refresh when expired
+  - ✅ Implemented `deleteTokens(sessionId: string): void`
+  - ✅ Added token expiry tracking
 
 #### 2.5: Implement Session Manager
-- [ ] Create `src/auth/session-manager.ts`
-  - Implement session storage interface:
-    ```typescript
-    interface SessionData {
-      sessionId: string;
-      transport: StreamableHTTPServerTransport;
-      fergusClient: FergusClient;
-      createdAt: Date;
-      lastAccessedAt: Date;
-    }
-    ```
-  - Implement `createSession(sessionId: string, transport: StreamableHTTPServerTransport, fergusClient: FergusClient): void`
-  - Implement `getSession(sessionId: string): SessionData | null`
-  - Implement `updateLastAccessed(sessionId: string): void`
-  - Implement `deleteSession(sessionId: string): void`
-  - Implement session cleanup (remove inactive sessions after 1 hour)
-  - Add session lifecycle logging
+- [x] Create `src/auth/session-manager.ts` (already implemented in Phase 1)
+  - ✅ Implemented session storage with SessionData interface
+  - ✅ Implemented `createSession()`, `getSession()`, `updateLastAccessed()`, `deleteSession()`
+  - ✅ Implemented automatic session cleanup for inactive sessions
+  - ✅ Added session lifecycle logging
 
 #### 2.6: Update FergusClient for Per-Request Tokens
-- [ ] Update `src/fergus-client.ts`
-  - Add constructor overload: `constructor(tokenProvider: () => Promise<string>)`
-  - Modify `request()` method to call `tokenProvider()` before each request
-  - Maintain backward compatibility with static token (for stdio mode)
-  - Update error handling to detect expired tokens (401 responses)
+- [x] Update `src/fergus-client.ts` (already implemented in Phase 1)
+  - ✅ Added constructor overload with tokenProvider
+  - ✅ Modified request() method to support dynamic token retrieval
+  - ✅ Maintained backward compatibility with static token
+  - ✅ Added error handling for expired tokens
 
-#### 2.7: Add OAuth Endpoints to HTTP Transport
-- [ ] Update `src/transports/http.ts`
-  - Add `GET /oauth/authorize` endpoint:
-    - Generate random state parameter (store in temporary map)
-    - Call `generateAuthUrl(state)`
-    - Redirect user to Fergus OAuth page
-  - Add `GET /oauth/callback` endpoint:
-    - Validate state parameter
-    - Extract authorization code from query params
-    - Call `exchangeCodeForTokens(code)`
-    - Generate session ID
-    - Store tokens with `storeTokens(sessionId, tokens)`
-    - Redirect to Claude callback: `https://claude.ai/api/mcp/auth_callback?sessionId=<id>`
-  - Update POST `/mcp` endpoint:
-    - On initialize request without session: redirect to `/oauth/authorize`
-    - On requests with session: retrieve access token, create FergusClient with token
-    - Handle token refresh automatically via TokenManager
-  - Add error handling for OAuth failures
+#### 2.7: Add OAuth Endpoints to HTTP Transport (FIXED FOR CLAUDE DESKTOP)
+- [x] Update `src/transports/http.ts`
+  - ✅ Added `/.well-known/oauth-authorization-server` metadata endpoint (RFC8414)
+  - ✅ Added `GET /authorize` endpoint - returns authorization URL as JSON
+  - ✅ Added `POST /authorize` endpoint - exchanges code for tokens, returns session as access_token
+  - ✅ Updated POST `/mcp` endpoint to use Bearer token authentication (not cookies)
+  - ✅ Removed cookie-based session management
+  - ✅ Changed redirect URI to Claude's callback: `https://claude.ai/api/mcp/auth_callback`
+  - ✅ Added proper CORS headers including Authorization header
+  - ✅ Added automatic token refresh via TokenManager
 
 #### 2.8: Test OAuth Flow
-- [ ] Configure OAuth client in Fergus (Ben to provide credentials)
-- [ ] Start HTTP server with OAuth enabled: `pnpm dev:http`
-- [ ] Test OAuth flow manually:
-  - Navigate to `http://localhost:3000/oauth/authorize`
-  - Verify redirect to Fergus OAuth page
-  - Authorize application
-  - Verify callback receives code
-  - Verify token exchange works
-  - Verify session created with tokens
-- [ ] Test MCP requests with OAuth session:
-  - Add server to Claude Desktop (remote mode)
-  - Verify OAuth prompt appears
-  - Complete authorization
-  - Test calling tools
-  - Verify each user's data is isolated
+- [x] OAuth endpoints implemented and ready for testing
+- [x] Start HTTP server with OAuth enabled: `pnpm dev:http`
+- [x] Test OAuth metadata discovery: `curl http://localhost:3100/.well-known/oauth-authorization-server`
+- [x] Configure server URL in AWS Cognito allowed callback URLs
+- [x] Test MCP requests with OAuth session:
+  - ✅ Add server to Claude Desktop (remote mode)
+  - ✅ OAuth discovery and registration working
+  - ✅ Complete authorization via Cognito
+  - ✅ Test calling tools (list-jobs successfully called)
+  - ✅ User-specific data isolation working
 
-**Success Criteria**: OAuth flow completes end-to-end, tokens stored per session, each user accesses their own Fergus data
+**Success Criteria**: ✅ **COMPLETE** - OAuth flow working end-to-end with Claude Desktop
+
+**Implementation Notes**:
+- Initial implementation used cookies which don't work with Claude Desktop
+- Fixed by using Bearer token pattern as per MCP OAuth spec
+- Added RFC8414 metadata endpoints (both standard and `/mcp` suffixed paths)
+- Added RFC7591 dynamic client registration endpoint (`/oauth/register`)
+- Added OAuth protected resource metadata endpoint (`/.well-known/oauth-protected-resource`)
+- Fixed token endpoint to accept `application/x-www-form-urlencoded` content type
+- Disabled DNS rebinding protection for remote OAuth (Claude doesn't send Origin header)
+- Complete flow: discovery → registration → authorize → Cognito auth → callback → token exchange → MCP requests
+- Session ID returned as access_token is used in Authorization header for subsequent MCP requests
+
+**Key Fixes Required for Claude Desktop**:
+1. Added `/.well-known/oauth-protected-resource` and `/oauth/register` endpoints
+2. Added `registration_endpoint` to authorization server metadata
+3. Added URL-encoded body parser for OAuth token endpoint
+4. Disabled DNS rebinding protection (conflicted with remote OAuth)
+5. Redirect URI points to our server (`/oauth/callback`), then we redirect to Claude's callback with our session code
 
 ---
 
