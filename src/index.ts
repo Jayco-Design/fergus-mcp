@@ -27,6 +27,9 @@ import { getSiteToolDefinition, handleGetSite } from './tools/get-site.js';
 import { listSitesToolDefinition, handleListSites } from './tools/list-sites.js';
 import { getUserToolDefinition, handleGetUser } from './tools/get-user.js';
 import { listUsersToolDefinition, handleListUsers } from './tools/list-users.js';
+import { createJobToolDefinition, handleCreateJob } from './tools/create-job.js';
+import { updateJobToolDefinition, handleUpdateJob } from './tools/update-job.js';
+import { finalizeJobToolDefinition, handleFinalizeJob } from './tools/finalize-job.js';
 
 /**
  * Main server setup
@@ -85,6 +88,9 @@ async function main() {
         listSitesToolDefinition,
         getUserToolDefinition,
         listUsersToolDefinition,
+        createJobToolDefinition,
+        updateJobToolDefinition,
+        finalizeJobToolDefinition,
       ],
     };
   });
@@ -173,6 +179,30 @@ async function main() {
             filterUserType?: string;
             filterStatus?: string;
           });
+
+        case 'create-job':
+          return await handleCreateJob(fergusClient, args as {
+            jobType: 'Quote' | 'Estimate' | 'Charge Up';
+            title: string;
+            description?: string;
+            customerId?: number;
+            siteId?: number;
+            customerReference?: string;
+            isDraft?: boolean;
+          });
+
+        case 'update-job':
+          return await handleUpdateJob(fergusClient, args as {
+            jobId: number;
+            title?: string;
+            description?: string;
+            customerId?: number;
+            siteId?: number;
+            customerReference?: string;
+          });
+
+        case 'finalize-job':
+          return await handleFinalizeJob(fergusClient, args as { jobId: number });
 
         default:
           throw new Error(`Unknown tool: ${name}`);
