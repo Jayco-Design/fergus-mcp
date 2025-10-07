@@ -385,13 +385,34 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 
 ---
 
-**Document Version**: 2.3
+**Document Version**: 2.4
 **Last Updated**: 2025-10-07
-**Status**: Phase 2 Complete - Ready for Phase 3 Action Tools
+**Status**: Phase 3 In Progress - Job Action Tools Complete
 
-**Next Engineer: Start Phase 3 Action Tools (create/update operations for jobs, quotes, customers, sites, users)**
+**Next Engineer: Continue Phase 3 - Implement remaining action tools (quotes, customers, sites, users)**
+
+## Known Issues
+
+### Fergus API Bug: User Status Filtering
+**Issue**: The `filterStatus=active` parameter returns users with `status="disabled"` in the response.
+
+**Root Cause**: In `/fergus-partner-api/src/routes/users/data.access.ts:111`, the "active" filter only checks `activated=true` but doesn't exclude `banned=true`. Users can have both `activated=true` AND `banned=true`, which the response logic correctly shows as "disabled" status.
+
+**Fix Required**: The active filter should check both conditions:
+```typescript
+default:  // "active"
+  return query.where((eb) =>
+    eb.and([
+      eb("rp_employee.activated", "=", true),
+      eb("rp_employee.banned", "=", false),
+    ])
+  );
+```
+
+**Status**: Reported to Fergus team for fix in partner API.
 
 ## Changelog
+- v2.4: **Phase 3 job tools** - Implemented create-job, update-job, and finalize-job action tools. Discovered and documented Fergus API bug where filterStatus=active returns disabled users (requires API fix). MCP server implementation is correct.
 - v2.3: **Pagination bug fix** - Fixed missing `pageCursor` parameter in list-users and list-jobs tools. Pagination now working correctly across all list endpoints. Tested with Fergus MCP server using its own tools (dogfooding).
 - v2.2: **Phase 2 COMPLETED** - Implemented user tools (list-users, get-user). All 10 read-only tools now complete: jobs, time entries, quotes, customers, sites, and users. Full filtering support including user type (contractor, field_worker, apprentice, tradesman, advisor, full_user, time_sheet_only) and status (active, disabled, invited). Project successfully builds and is ready for Phase 3 Action Tools.
 - v2.1: **Phase 2 mostly completed** - Implemented 8 new read-only tools: list-customers, get-customer, list-sites, get-site, list-quotes, get-quote, list-time-entries, get-time-entry. All endpoints verified against actual Fergus API documentation. Proper pagination implemented with pageSize/pageCursor. User tools remain to be implemented.
