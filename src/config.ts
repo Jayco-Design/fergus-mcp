@@ -16,6 +16,14 @@ export interface Config {
   fergusBaseUrl?: string;
 }
 
+export interface HttpConfig extends Config {
+  httpPort: number;
+  httpHost: string;
+  allowedOrigins?: string[];
+  allowedHosts?: string[];
+  enableDnsRebindingProtection?: boolean;
+}
+
 /**
  * Loads and validates configuration from command-line arguments and environment variables
  * Priority: CLI args > Environment variables
@@ -49,5 +57,21 @@ export function loadConfig(): Config {
   return {
     fergusApiToken,
     fergusBaseUrl: baseUrlFromArgs || process.env.FERGUS_BASE_URL,
+  };
+}
+
+/**
+ * Loads HTTP server configuration
+ */
+export function loadHttpConfig(): HttpConfig {
+  const baseConfig = loadConfig();
+
+  return {
+    ...baseConfig,
+    httpPort: parseInt(process.env.HTTP_PORT || '3100', 10),
+    httpHost: process.env.HTTP_HOST || '0.0.0.0',
+    allowedOrigins: process.env.ALLOWED_ORIGINS?.split(','),
+    allowedHosts: process.env.ALLOWED_HOSTS?.split(','),
+    enableDnsRebindingProtection: process.env.ENABLE_DNS_REBINDING_PROTECTION !== 'false',
   };
 }
