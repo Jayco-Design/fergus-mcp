@@ -43,8 +43,8 @@ This MCP server **only implements Tools**, not Resources. This decision was made
 - **Package Manager**: pnpm
 - **SDK**: `@modelcontextprotocol/sdk` (official TypeScript SDK)
 - **Transport**: StdioServerTransport (for CLI integration)
-- **HTTP Client**: Native fetch or axios for Fergus API calls
-- **Schema Validation**: Zod (required by MCP SDK)
+- **HTTP Client**: Native fetch for Fergus API calls
+- **Schema Validation**: JSON Schema (MCP standard)
 - **Authentication**: Personal Access Token (PAT) via HTTP Bearer token
 
 ### Project Structure
@@ -167,7 +167,7 @@ fergus-mcp/
      * Status: Implemented and tested
 
 #### Tool Design Principles:
-- Use Zod schemas for strict input validation
+- Use JSON Schema for input validation with TypeScript types for type safety
 - Provide clear, descriptive error messages
 - Return structured results with relevant details
 - Include confirmation messages for successful actions
@@ -232,7 +232,7 @@ Implement context-aware completions:
 
 ### Unit Tests
 - Test individual tool handlers
-- Validate Zod schemas
+- Validate input schemas and TypeScript types
 - Mock Fergus API responses
 
 ### Integration Tests
