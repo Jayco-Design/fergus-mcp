@@ -1,0 +1,60 @@
+services:
+  # Redis Key-Value Store for session management
+  - type: redis
+    name: fergus-mcp-redis
+    ipAllowList: [] # only allow internal connections
+    plan: free # optional (defaults to starter)
+    maxmemoryPolicy: allkeys-lru # LRU eviction for session storage
+
+  # Node.js HTTP Server (MCP Server)
+  - type: web
+    name: fergus-mcp-server
+    runtime: node
+    region: oregon # choose your preferred region
+    plan: free # optional (defaults to starter)
+    buildCommand: pnpm install && pnpm run build
+    startCommand: pnpm run start:http
+    envVars:
+      # Redis Configuration
+      - key: SESSION_STORAGE
+        value: redis
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: fergus-mcp-redis
+          property: connectionString
+
+      # Server Configuration
+      - key: HTTP_PORT
+        value: 10000 # Render uses port 10000 for web services
+      - key: HTTP_HOST
+        value: 0.0.0.0
+      - key: PUBLIC_URL
+        value: https://fergus-mcp-server.onrender.com # Update with your actual Render URL
+      - key: NODE_ENV
+        value: production
+
+      # CORS and Security
+      - key: ALLOWED_ORIGINS
+        value: https://claude.ai,https://www.claude.ai
+      - key: ENABLE_DNS_REBINDING_PROTECTION
+        value: false # Disable for remote OAuth
+
+      # AWS Cognito OAuth Configuration
+      # These should be added via Render Dashboard for security
+      - key: COGNITO_USER_POOL_ID
+        sync: false # Mark as secret
+      - key: COGNITO_CLIENT_ID
+        sync: false # Mark as secret
+      - key: COGNITO_CLIENT_SECRET
+        sync: false # Mark as secret
+      - key: COGNITO_REGION
+        value: us-east-1
+      - key: COGNITO_DOMAIN
+        value: auth.fergus.com
+      - key: OAUTH_REDIRECT_URI
+        value: https://fergus-mcp-server.onrender.com/oauth/callback # Update with your actual Render URL
+
+      # Session Configuration
+      - key: SESSION_TIMEOUT_MS
+        value: 3600000 # 1 hour

@@ -5,6 +5,7 @@
 
 import { OAuthConfig } from '../config.js';
 import { OAuthTokens, refreshAccessToken } from './oauth-handler.js';
+import { ITokenManager } from './token-manager-interface.js';
 
 interface StoredTokens {
   tokens: OAuthTokens;
@@ -15,7 +16,7 @@ interface StoredTokens {
 /**
  * Token manager class for handling OAuth token storage and refresh
  */
-export class TokenManager {
+export class TokenManager implements ITokenManager {
   private storage = new Map<string, StoredTokens>();
   private config: OAuthConfig;
   private refreshThresholdMs = 5 * 60 * 1000; // Refresh if < 5 minutes remaining

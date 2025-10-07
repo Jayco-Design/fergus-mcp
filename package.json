@@ -12,8 +12,8 @@
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http-server.ts",
     "dev:oauth": "tsx src/http-oauth-server.ts",
-    "start:http": "node dist/http-server.js",
-    "start:oauth": "node dist/http-oauth-server.js",
+    "start": "node dist/index.js",
+    "start:http": "node dist/http-oauth-server.js",
     "prepare": "pnpm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -36,12 +36,14 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "ioredis": "^5.8.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/ioredis": "^5.0.0",
     "@types/node": "^24.7.0",
     "@types/uuid": "^11.0.0",
     "tsx": "^4.20.6",

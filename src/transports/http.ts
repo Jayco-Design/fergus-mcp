@@ -12,6 +12,7 @@ import { FergusClient } from '../fergus-client.js';
 import { createMcpServer } from '../server.js';
 import { SessionManager } from '../auth/session-manager.js';
 import { TokenManager } from '../auth/token-manager.js';
+import { RedisTokenManager } from '../auth/redis-token-manager.js';
 import { generateAuthUrl, exchangeCodeForTokens, generateState, generatePKCE } from '../auth/oauth-handler.js';
 import { HttpOAuthConfig } from '../config.js';
 
@@ -48,7 +49,13 @@ export interface HttpTransportConfig {
 export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<void> {
   const app = express();
   const sessionManager = new SessionManager(config.session);
-  const tokenManager = new TokenManager(config.oauth);
+
+  // Initialize token manager based on session storage type
+  const tokenManager = config.session.storage === 'redis' && config.session.redisUrl
+    ? new RedisTokenManager(config.oauth, config.session.redisUrl)
+    : new TokenManager(config.oauth);
+
+  console.error(`[HTTP OAuth Server] Token storage: ${config.session.storage}`);
 
   // Configure CORS
   app.use(cors({
@@ -515,11 +522,31 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
   // Start server
   return new Promise((resolve) => {
-    app.listen(config.httpPort, config.httpHost, () => {
+    const server = app.listen(config.httpPort, config.httpHost, () => {
       console.error(`MCP HTTP server (OAuth) listening on http://${config.httpHost}:${config.httpPort}`);
       console.error(`OAuth authorization URL: http://${config.httpHost}:${config.httpPort}/oauth/authorize`);
       resolve();
     });
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      console.error('[HTTP OAuth Server] Shutting down gracefully...');
+
+      // Close HTTP server
+      server.close(() => {
+        console.error('[HTTP OAuth Server] HTTP server closed');
+      });
+
+      // Close Redis connection if using Redis
+      if (tokenManager instanceof RedisTokenManager) {
+        await tokenManager.close();
+      }
+
+      process.exit(0);
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
   });
 }
 
