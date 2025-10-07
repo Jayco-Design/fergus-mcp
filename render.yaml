@@ -3,7 +3,7 @@ services:
   - type: redis
     name: fergus-mcp-redis
     ipAllowList: [] # only allow internal connections
-    plan: free # optional (defaults to starter)
+    plan: starter
     maxmemoryPolicy: allkeys-lru # LRU eviction for session storage
 
   # Node.js HTTP Server (MCP Server)

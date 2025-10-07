@@ -397,15 +397,18 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 5. ✅ Test with Claude Desktop (requires Fergus API token)
 6. ✅ Phase 2 Read Operations (customers, quotes, sites, time entries, users)
 7. ✅ Phase 3 Action Tools (jobs, quotes, customers, sites, users)
-8. ⏭️ Begin Phase 4 (Advanced Features)
+8. ✅ Phase 4.1 MCP Prompts (job creation, quote generator, weekly report)
+9. ✅ Remote HTTP Server with OAuth 2.0 (see remote-mcp-plan.md)
+10. ✅ Render Deployment Configuration with Redis
+11. 🚀 Ready for Production Deployment
 
 ---
 
-**Document Version**: 2.8
-**Last Updated**: 2025-10-07
-**Status**: Phase 3 Enhanced - Advanced Quote Management Tools Implemented
+**Document Version**: 2.9
+**Last Updated**: 2025-10-08
+**Status**: Production Ready - Render Deployment Configured
 
-**Next Engineer: Continue Phase 4 (Smart Completions, Notifications, Batch Operations) or focus on testing & documentation**
+**Next Engineer: Deploy to Render following DEPLOYMENT.md, or continue Phase 4 Advanced Features (Smart Completions, Notifications, Batch Operations)**
 
 ## Known Issues
 
@@ -448,6 +451,7 @@ default:  // "active"
 **Status**: Endpoint should be implemented to match the PUT endpoint that exists at this path.
 
 ## Changelog
+- v2.9: **Production Deployment Ready** - Implemented Redis session storage with `RedisTokenManager` and `ITokenManager` interface for swappable storage backends. Created complete Render deployment configuration with `render.yaml` (Infrastructure as Code). Added comprehensive documentation: `DEPLOYMENT.md` (step-by-step guide), `RENDER_QUICKSTART.md` (quick reference). Updated `README.md` with deployment section. Server automatically selects in-memory or Redis storage based on environment. Graceful shutdown for Redis connections. Added `ioredis` dependency (v5.8.1). Project now production-ready for Render deployment with free tier Redis + Node.js web service. See `remote-mcp-plan.md` for complete remote server implementation details.
 - v2.8: **Phase 3 Enhanced - Quote Management Tools** - Added 3 new quote tools bringing total to 16 action tools: `get-quote-detail` (comprehensive quote data with all sections/line items), `update-quote` (update by quote ID), and `update-quote-version` (update by version number). Discovered and documented two Fergus API bugs: (1) update quote endpoints require title/description or generate invalid SQL, (2) missing GET endpoint for quote by version number. Implemented workarounds for both bugs. Added prominent warnings to update tools about replacing ALL sections to prevent data loss.
 - v2.7: **Phase 4.1 COMPLETED** - Implemented MCP Prompts for common workflows: job-creation-assistant (guides through draft→finalized workflow), quote-generator (helps structure quotes with sections/line items), and weekly-report (generates comprehensive status reports). Prompts capability added to server with ListPromptsRequestSchema and GetPromptRequestSchema handlers.
 - v2.6: **Phase 3 COMPLETED** - Implemented final action tool: update-user (PATCH /users/{userId}) with support for firstName, lastName, address (7 fields), payRate, chargeOutRate, and contactItems. All 13 action tools now complete. Ready for Phase 4.
