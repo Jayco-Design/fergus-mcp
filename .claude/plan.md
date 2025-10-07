@@ -175,11 +175,18 @@ fergus-mcp/
 
 ### Phase 4: Advanced Features ⏳ IN PROGRESS
 
-#### 1. Prompts for Common Workflows ⏳
+#### 1. Prompts for Common Workflows ✅ COMPLETED
 Create templated prompts for frequent tasks:
-- ⏳ `job-creation-assistant`: Guide through job creation (draft → finalized workflow)
-- ⏳ `quote-generator`: Help create comprehensive quotes with sections and line items
-- ⏳ `weekly-report`: Generate job status summaries for a date range
+- ✅ `job-creation-assistant`: Guide through job creation (draft → finalized workflow)
+  * Prompts user through: create draft → find/create customer & site → update job → finalize
+  * Optional jobType argument for customization
+- ✅ `quote-generator`: Help create comprehensive quotes with sections and line items
+  * Requires jobId argument
+  * Provides quote structure guidance with sections and line items
+  * Explains isLabour vs salesAccountId requirement
+- ✅ `weekly-report`: Generate job status summaries for a date range
+  * Optional dateFrom/dateTo arguments (defaults to past 7 days)
+  * Guides through comprehensive reporting: jobs, quotes, time entries, team productivity
 
 #### 2. Smart Completions
 Implement context-aware completions:
@@ -387,11 +394,11 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 
 ---
 
-**Document Version**: 2.6
+**Document Version**: 2.7
 **Last Updated**: 2025-10-07
-**Status**: Phase 3 Complete - All 13 Action Tools Implemented
+**Status**: Phase 4.1 Complete - Prompts for Common Workflows Implemented
 
-**Next Engineer: Proceed to Phase 4 (Advanced Features)**
+**Next Engineer: Continue Phase 4 (Smart Completions, Notifications, Batch Operations) or focus on testing & documentation**
 
 ## Known Issues
 
@@ -414,6 +421,7 @@ default:  // "active"
 **Status**: Reported to Fergus team for fix in partner API.
 
 ## Changelog
+- v2.7: **Phase 4.1 COMPLETED** - Implemented MCP Prompts for common workflows: job-creation-assistant (guides through draft→finalized workflow), quote-generator (helps structure quotes with sections/line items), and weekly-report (generates comprehensive status reports). Prompts capability added to server with ListPromptsRequestSchema and GetPromptRequestSchema handlers.
 - v2.6: **Phase 3 COMPLETED** - Implemented final action tool: update-user (PATCH /users/{userId}) with support for firstName, lastName, address (7 fields), payRate, chargeOutRate, and contactItems. All 13 action tools now complete. Ready for Phase 4.
 - v2.5: **Phase 3 nearly complete** - Implemented 9 additional action tools: create-quote, update-quote (with correct schema requiring EITHER isLabour OR salesAccountId), create-customer, update-customer, create-site, update-site. Added PATCH method to FergusClient. All tools tested successfully via MCP. Only update-user remains unimplemented.
 - v2.4: **Phase 3 job tools** - Implemented create-job, update-job, and finalize-job action tools. Discovered and documented Fergus API bug where filterStatus=active returns disabled users (requires API fix). MCP server implementation is correct.

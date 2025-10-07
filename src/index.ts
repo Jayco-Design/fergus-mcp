@@ -10,6 +10,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadConfig } from './config.js';
 import { FergusClient } from './fergus-client.js';
@@ -37,6 +39,11 @@ import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/upda
 import { createSiteToolDefinition, handleCreateSite } from './tools/create-site.js';
 import { updateSiteToolDefinition, handleUpdateSite } from './tools/update-site.js';
 import { updateUserToolDefinition, handleUpdateUser } from './tools/update-user.js';
+
+// Prompt handlers
+import { jobCreationAssistantPromptDefinition, getJobCreationAssistantPrompt } from './prompts/job-creation-assistant.js';
+import { quoteGeneratorPromptDefinition, getQuoteGeneratorPrompt } from './prompts/quote-generator.js';
+import { weeklyReportPromptDefinition, getWeeklyReportPrompt } from './prompts/weekly-report.js';
 
 /**
  * Main server setup
@@ -73,6 +80,7 @@ async function main() {
     {
       capabilities: {
         tools: {},
+        prompts: {},
       },
     }
   );
@@ -107,6 +115,43 @@ async function main() {
         updateUserToolDefinition,
       ],
     };
+  });
+
+  /**
+   * Handler for listing available prompts
+   */
+  server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+      prompts: [
+        jobCreationAssistantPromptDefinition,
+        quoteGeneratorPromptDefinition,
+        weeklyReportPromptDefinition,
+      ],
+    };
+  });
+
+  /**
+   * Handler for getting a specific prompt
+   */
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    switch (name) {
+      case 'job-creation-assistant':
+        return getJobCreationAssistantPrompt(args as { jobType?: string });
+
+      case 'quote-generator':
+        if (!args?.jobId) {
+          throw new Error('jobId is required for quote-generator prompt');
+        }
+        return getQuoteGeneratorPrompt(args as { jobId: string });
+
+      case 'weekly-report':
+        return getWeeklyReportPrompt(args as { dateFrom?: string; dateTo?: string });
+
+      default:
+        throw new Error(`Unknown prompt: ${name}`);
+    }
   });
 
   /**
