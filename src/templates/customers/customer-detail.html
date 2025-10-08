@@ -12,6 +12,8 @@
   </div>
 
   <script>
+    const SET_GLOBALS_EVENT_TYPE = 'openai:set_globals';
+
     function getInitials(name) {
       if (!name) return '?';
       const parts = name.trim().split(' ');
@@ -19,48 +21,39 @@
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     }
 
-    function render(customer) {
-      const container = document.getElementById('customer-detail');
-
-      if (!customer || !customer.id) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">❌</div>
-            <div class="empty-state-title">Customer not found</div>
-            <div class="empty-state-message">The requested customer could not be loaded</div>
-          </div>
-        `;
-        return;
-      }
-
-      const customerName = customer.name || customer.customerFullName || 'Unnamed Customer';
-      const initials = getInitials(customerName);
-
-      const html = `
-        <!-- Header Section -->
-        <div class="detail-header">
-          <div style="display: flex; align-items: center; gap: var(--spacing-md); margin-bottom: var(--spacing-sm);">
-            <div class="customer-card-avatar" style="width: 64px; height: 64px; font-size: 24px;">
-              ${escapeHtml(initials)}
-            </div>
-            <div>
-              <h1 class="detail-title">${escapeHtml(customerName)}</h1>
-              <div class="detail-subtitle">Customer ID: ${escapeHtml(customer.id?.toString() || 'N/A')}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Contact Information Section -->
-        ${renderContactSection()}
-
-        <!-- Addresses Section -->
-        ${renderAddressesSection()}
-      `;
-
-      container.innerHTML = html;
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
     }
 
-    function renderContactSection() {
+    function formatAddress(address) {
+      if (!address) return '<span class="text-tertiary">No address provided</span>';
+
+      const parts = [];
+      if (address.line1 || address.address1) parts.push(escapeHtml(address.line1 || address.address1));
+      if (address.line2 || address.address2) parts.push(escapeHtml(address.line2 || address.address2));
+
+      const cityLine = [];
+      if (address.city) cityLine.push(escapeHtml(address.city));
+      if (address.state) cityLine.push(escapeHtml(address.state));
+      if (address.postalCode) cityLine.push(escapeHtml(address.postalCode));
+      if (cityLine.length > 0) parts.push(cityLine.join(', '));
+
+      if (address.country) parts.push(escapeHtml(address.country));
+
+      return parts.length > 0
+        ? parts.map(p => `<div>${p}</div>`).join('')
+        : '<span class="text-tertiary">No address provided</span>';
+    }
+
+    function addressesEqual(addr1, addr2) {
+      if (!addr1 || !addr2) return false;
+      return JSON.stringify(addr1) === JSON.stringify(addr2);
+    }
+
+    function renderContactSection(customer) {
       const mainContact = customer.mainContact || {};
       const email = mainContact.email || customer.email;
       const phone = mainContact.phone || customer.phone;
@@ -119,7 +112,7 @@
       `;
     }
 
-    function renderAddressesSection() {
+    function renderAddressesSection(customer) {
       const physicalAddress = customer.physicalAddress || customer.address;
       const postalAddress = customer.postalAddress;
 
@@ -170,57 +163,80 @@
       return html;
     }
 
-    function formatAddress(address) {
-      if (!address) return '<span class="text-tertiary">No address provided</span>';
+    function render() {
+      // Access toolOutput from window.openai
+      const toolOutput = window.openai?.toolOutput;
 
-      const parts = [];
-      if (address.line1 || address.address1) parts.push(escapeHtml(address.line1 || address.address1));
-      if (address.line2 || address.address2) parts.push(escapeHtml(address.line2 || address.address2));
-
-      const cityLine = [];
-      if (address.city) cityLine.push(escapeHtml(address.city));
-      if (address.state) cityLine.push(escapeHtml(address.state));
-      if (address.postalCode) cityLine.push(escapeHtml(address.postalCode));
-      if (cityLine.length > 0) parts.push(cityLine.join(', '));
-
-      if (address.country) parts.push(escapeHtml(address.country));
-
-      return parts.length > 0
-        ? parts.map(p => `<div>${p}</div>`).join('')
-        : '<span class="text-tertiary">No address provided</span>';
-    }
-
-    function addressesEqual(addr1, addr2) {
-      if (!addr1 || !addr2) return false;
-      return JSON.stringify(addr1) === JSON.stringify(addr2);
-    }
-
-    function escapeHtml(text) {
-      if (!text) return '';
-      const div = document.createElement('div');
-      div.textContent = String(text);
-      return div.innerHTML;
-    }
-
-    // Listen for data from ChatGPT Apps SDK
-    window.addEventListener('openai:set_globals', (event) => {
-      console.log('[Fergus MCP] openai:set_globals event received');
-
-      // Access customer directly from toolOutput (structuredContent is flattened)
-      const toolOutput = event.detail?.globals?.toolOutput;
-      const customer = toolOutput?.customer;
-
-      console.log('[Fergus MCP] Customer data:', customer);
-      if (customer) {
-        render(customer);
+      if (!toolOutput) {
+        console.log('[Fergus MCP] No toolOutput available yet');
+        return;
       }
+
+      const customer = toolOutput.customer;
+
+      if (!customer) {
+        console.log('[Fergus MCP] No customer in toolOutput');
+        return;
+      }
+
+      console.log('[Fergus MCP] Rendering customer:', customer.id);
+
+      const container = document.getElementById('customer-detail');
+
+      if (!customer.id) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <div class="empty-state-title">Customer not found</div>
+            <div class="empty-state-message">The requested customer could not be loaded</div>
+          </div>
+        `;
+        return;
+      }
+
+      const customerName = customer.name || customer.customerFullName || 'Unnamed Customer';
+      const initials = getInitials(customerName);
+
+      const html = `
+        <!-- Header Section -->
+        <div class="detail-header">
+          <div style="display: flex; align-items: center; gap: var(--spacing-md); margin-bottom: var(--spacing-sm);">
+            <div class="customer-card-avatar" style="width: 64px; height: 64px; font-size: 24px;">
+              ${escapeHtml(initials)}
+            </div>
+            <div>
+              <h1 class="detail-title">${escapeHtml(customerName)}</h1>
+              <div class="detail-subtitle">Customer ID: ${escapeHtml(customer.id?.toString() || 'N/A')}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contact Information Section -->
+        ${renderContactSection(customer)}
+
+        <!-- Addresses Section -->
+        ${renderAddressesSection(customer)}
+      `;
+
+      container.innerHTML = html;
+    }
+
+    // Listen for the set_globals event (fired when data updates)
+    window.addEventListener(SET_GLOBALS_EVENT_TYPE, (event) => {
+      console.log('[Fergus MCP] openai:set_globals event received');
+      console.log('[Fergus MCP] event.detail.globals:', event.detail.globals);
+
+      // Re-render when globals change
+      render();
     });
 
-    // Also render immediately if data is already available (for compatibility)
-    const initialCustomer = window.openai?.toolOutput?.customer;
-    if (initialCustomer) {
-      console.log('[Fergus MCP] Initial customer data available:', initialCustomer);
-      render(initialCustomer);
+    // Initial render on load (in case data is already available)
+    console.log('[Fergus MCP] Customer detail template loaded');
+    console.log('[Fergus MCP] window.openai:', window.openai);
+
+    // Try rendering immediately if window.openai exists
+    if (window.openai) {
+      render();
     }
   </script>
 </body>

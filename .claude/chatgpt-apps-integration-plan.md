@@ -406,7 +406,40 @@ fergus-mcp/
 
 ### Critical Discoveries
 
-1. **Template Metadata Location**
+1. **StructuredContent is Flattened** ⚠️
+   - ❌ **Wrong**: `window.openai.toolOutput.structuredContent.customers`
+   - ✅ **Correct**: `window.openai.toolOutput.customers`
+   - ChatGPT takes properties from `structuredContent` and places them directly on `toolOutput`
+   ```typescript
+   // What we return:
+   return {
+     content: [...],
+     structuredContent: {
+       customers: [...],
+       pagination: {...}
+     }
+   };
+
+   // What ChatGPT provides to template:
+   window.openai.toolOutput = {
+     customers: [...],      // <- flattened!
+     pagination: {...}      // <- flattened!
+   };
+   ```
+
+2. **Event-Based Rendering Required**
+   - Templates must listen for `openai:set_globals` event
+   - Data may not be available when template first loads
+   - Access from event: `event.detail.globals.toolOutput`
+   - Fallback check: `window.openai.toolOutput` (for immediate availability)
+
+3. **Minimal Text Content**
+   - When using `outputTemplate`, keep `content` text minimal
+   - ChatGPT shows BOTH the widget AND the text content
+   - Return summary only, not full JSON dump
+   - Example: "Found 5 customers" instead of "Found 5 customers\n\n[...JSON...]"
+
+4. **Template Metadata Location**
    - ❌ **Wrong**: Template URIs in `annotations` field
    - ✅ **Correct**: Template URIs must be in `_meta` field
    ```typescript
@@ -455,9 +488,11 @@ fergus-mcp/
 
 5. **Structured Content Pattern**
    - Tools return both `content` (text) and `structuredContent` (data)
-   - `content`: Human-readable text + JSON (for Claude/text clients)
+   - `content`: Human-readable text (keep minimal when using templates!)
    - `structuredContent`: Clean data structure for ChatGPT rendering
-   - Templates read from `window.structuredContent`
+   - **CRITICAL**: ChatGPT **flattens** `structuredContent` onto `toolOutput`
+   - Templates access data via: `window.openai.toolOutput.customers` (NOT `window.openai.toolOutput.structuredContent.customers`)
+   - Event access: `event.detail.globals.toolOutput.customers`
 
 ### Architecture Decisions Made
 
