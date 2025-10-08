@@ -14,9 +14,16 @@
 
   <script>
     // Get structured data from ChatGPT
+    console.log('[Fergus MCP] Template loaded');
+    console.log('[Fergus MCP] window.openai:', window.openai);
+    console.log('[Fergus MCP] toolOutput:', window.openai?.toolOutput);
+    console.log('[Fergus MCP] structuredContent:', window.openai?.toolOutput?.structuredContent);
+
     const data = window.openai?.toolOutput?.structuredContent || {};
     const customers = data.customers || [];
     const pagination = data.pagination || {};
+
+    console.log('[Fergus MCP] Parsed data:', { customers, pagination });
 
     function getInitials(name) {
       if (!name) return '?';
