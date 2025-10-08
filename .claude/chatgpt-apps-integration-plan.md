@@ -6,16 +6,16 @@ This plan outlines the refactoring and enhancement of the Fergus MCP server to p
 
 **Created**: 2025-10-08
 **Last Updated**: 2025-10-09
-**Status**: ✅ Phases 1-4 Complete for Customers | Next: Sites, Jobs, Quotes Templates
+**Status**: 🔄 Phase 1 Revised - Consolidating to One File Per Entity + Shared Schemas
 
 ---
 
 ## Current State
 
+### Functionality
 - ✅ 20 tools functional via stdio and HTTP transports (10 read, 10 action)
 - ✅ Unauthenticated tool discovery enabled for ChatGPT
 - ✅ Read-only annotations (`readOnlyHint: true`) added to read-only tools
-- ✅ Customer tools refactored into `src/tools/customers/` subdirectory
 - ✅ Structured content implemented for:
   - `list-users` (users array + pagination)
   - `list-sites` (sites array + pagination)
@@ -25,12 +25,19 @@ This plan outlines the refactoring and enhancement of the Fergus MCP server to p
   - `templates/customers/list-customers.html` (grid/card view)
   - `templates/customers/customer-detail.html` (detail card)
   - `templates/shared/styles.css` (design system)
-- ✅ MCP resource server serving templates via `ui://` protocol (registerTemplateResources enabled)
+- ✅ MCP resource server serving templates via `ui://` protocol
 - ✅ Build process copies templates to `dist/` folder
-- ✅ Template metadata in `_meta` field (not annotations)
-- ✅ Resources capability enabled in server
 - ✅ Client detection working (`isChatGPT()` checks for `openai/userAgent`)
-- ✅ Template rendering issues fixed (check `window.openai?.toolOutput` before render)
+- ✅ Template rendering issues fixed
+
+### Code Organization Issues (To Be Addressed in Phase 1)
+- ⚠️ **Significant schema duplication** (~240+ lines):
+  - `addressSchema` duplicated in: `create-customer.ts`, `update-customer.ts`, `create-site.ts`, `update-site.ts`
+  - `contactSchema` duplicated in: `create-customer.ts`, `update-customer.ts`, `create-site.ts`, `update-site.ts`
+  - Each schema: ~60 lines × 4 files = 240 lines of duplication
+- ⚠️ **Customer tools split across 4 files** in `src/tools/customers/` subdirectory
+- ⚠️ **Using barrel exports** (`customers/index.ts`) - poor practice for build performance
+- ⚠️ **19 other tools** still in flat `src/tools/` directory structure
 
 ---
 
@@ -46,51 +53,22 @@ This plan outlines the refactoring and enhancement of the Fergus MCP server to p
 
 ## Proposed Structure
 
+**Key Architecture Decisions:**
+1. **One file per entity** - All operations for an entity (get, list, create, update) in a single file
+2. **Shared schemas** - Common schemas (address, contact, etc.) extracted to `schemas.ts`
+3. **No barrel exports** - Direct imports from entity files (better tree-shaking, clearer dependencies)
+
 ```
 fergus-mcp/
 ├── src/
 │   ├── tools/
-│   │   ├── index.ts                    # Tool registry/exports
-│   │   ├── shared/                     # Shared utilities
-│   │   │   ├── response-builder.ts    # Helper to build structured responses
-│   │   │   ├── template-paths.ts      # Template URI constants
-│   │   │   └── types.ts                # Shared TypeScript types
-│   │   ├── jobs/
-│   │   │   ├── get-job.ts
-│   │   │   ├── list-jobs.ts
-│   │   │   ├── create-job.ts
-│   │   │   ├── update-job.ts
-│   │   │   ├── finalize-job.ts
-│   │   │   └── index.ts                # Export all job tools
-│   │   ├── quotes/
-│   │   │   ├── get-quote.ts
-│   │   │   ├── get-quote-detail.ts
-│   │   │   ├── list-quotes.ts
-│   │   │   ├── create-quote.ts
-│   │   │   ├── update-quote.ts
-│   │   │   ├── update-quote-version.ts
-│   │   │   └── index.ts
-│   │   ├── customers/
-│   │   │   ├── get-customer.ts
-│   │   │   ├── list-customers.ts
-│   │   │   ├── create-customer.ts
-│   │   │   ├── update-customer.ts
-│   │   │   └── index.ts
-│   │   ├── sites/
-│   │   │   ├── get-site.ts
-│   │   │   ├── list-sites.ts
-│   │   │   ├── create-site.ts
-│   │   │   ├── update-site.ts
-│   │   │   └── index.ts
-│   │   ├── users/
-│   │   │   ├── get-user.ts
-│   │   │   ├── list-users.ts
-│   │   │   ├── update-user.ts
-│   │   │   └── index.ts
-│   │   └── time-entries/
-│   │       ├── get-time-entry.ts
-│   │       ├── list-time-entries.ts
-│   │       └── index.ts
+│   │   ├── schemas.ts                  # Shared JSON schemas (address, contact, etc.)
+│   │   ├── customers.ts                # All customer tools (get, list, create, update)
+│   │   ├── sites.ts                    # All site tools (get, list, create, update)
+│   │   ├── jobs.ts                     # All job tools (get, list, create, update, finalize)
+│   │   ├── quotes.ts                   # All quote tools (get, get-detail, list, create, update, update-version)
+│   │   ├── users.ts                    # All user tools (get, list, update)
+│   │   └── time-entries.ts             # All time entry tools (get, list)
 │   ├── templates/                      # UI templates for ChatGPT Apps
 │   │   ├── customers/
 │   │   │   ├── list-customers.html     # Table/card view
@@ -114,52 +92,244 @@ fergus-mcp/
 │   └── server.ts                       # Update imports
 ```
 
+### Example: `src/tools/schemas.ts`
+
+```typescript
+/**
+ * Shared JSON schemas used across multiple tools
+ * Eliminates duplication and ensures consistency
+ */
+
+export const addressSchema = {
+  type: 'object',
+  description: 'Physical or postal address',
+  properties: {
+    address1: { type: 'string', description: 'Address line 1' },
+    address2: { type: 'string', description: 'Address line 2' },
+    city: { type: 'string', description: 'City' },
+    state: { type: 'string', description: 'State/province' },
+    postalCode: { type: 'string', description: 'Postal/ZIP code' },
+    country: { type: 'string', description: 'Country' },
+  },
+};
+
+export const contactSchema = {
+  type: 'object',
+  description: 'Contact person information',
+  properties: {
+    firstName: { type: 'string', description: 'First name of the contact' },
+    lastName: { type: 'string', description: 'Last name of the contact' },
+    position: { type: 'string', description: 'Position/title of the contact' },
+    company: { type: 'string', description: 'Company name' },
+    contactItems: {
+      type: 'array',
+      description: 'Contact methods (email, phone, mobile, etc.)',
+      items: {
+        type: 'object',
+        properties: {
+          contactType: {
+            type: 'string',
+            enum: ['email', 'phone', 'mobile', 'other', 'fax', 'website'],
+            description: 'Type of contact',
+          },
+          contactValue: {
+            type: 'string',
+            description: 'Contact value (email address, phone number, etc.)',
+          },
+        },
+        required: ['contactType', 'contactValue'],
+      },
+    },
+  },
+};
+```
+
+### Example: `src/tools/customers.ts`
+
+```typescript
+import { FergusClient } from '../fergus-client.js';
+import { formatResponse, isChatGPT } from '../utils/format-response.js';
+import { addressSchema, contactSchema } from './schemas.js';
+
+// ===== GET CUSTOMER =====
+export const getCustomerToolDefinition = {
+  name: 'get-customer',
+  description: 'Get details of a specific customer by ID',
+  // ... definition
+};
+
+export async function handleGetCustomer(...) { ... }
+
+// ===== LIST CUSTOMERS =====
+export const listCustomersToolDefinition = {
+  name: 'list-customers',
+  description: 'List customers with optional search',
+  inputSchema: {
+    properties: {
+      // ... pagination, search params
+    }
+  },
+  // ... definition
+};
+
+export async function handleListCustomers(...) { ... }
+
+// ===== CREATE CUSTOMER =====
+export const createCustomerToolDefinition = {
+  name: 'create-customer',
+  description: 'Create a new customer',
+  inputSchema: {
+    properties: {
+      customerFullName: { type: 'string' },
+      mainContact: contactSchema,        // ← Reused!
+      physicalAddress: addressSchema,    // ← Reused!
+      postalAddress: addressSchema,      // ← Reused!
+    },
+    required: ['customerFullName', 'mainContact'],
+  },
+};
+
+export async function handleCreateCustomer(...) { ... }
+
+// ===== UPDATE CUSTOMER =====
+export const updateCustomerToolDefinition = {
+  name: 'update-customer',
+  description: 'Update an existing customer',
+  inputSchema: {
+    properties: {
+      customerId: { type: 'number' },
+      customerFullName: { type: 'string' },
+      mainContact: contactSchema,        // ← Reused!
+      physicalAddress: addressSchema,    // ← Reused!
+      postalAddress: addressSchema,      // ← Reused!
+    },
+    required: ['customerId', 'customerFullName', 'mainContact'],
+  },
+};
+
+export async function handleUpdateCustomer(...) { ... }
+```
+
+### Example: `src/server.ts`
+
+```typescript
+// Direct imports (no barrel exports)
+import {
+  getCustomerToolDefinition,
+  listCustomersToolDefinition,
+  createCustomerToolDefinition,
+  updateCustomerToolDefinition,
+  handleGetCustomer,
+  handleListCustomers,
+  handleCreateCustomer,
+  handleUpdateCustomer,
+} from './tools/customers.js';
+
+import {
+  getSiteToolDefinition,
+  listSitesToolDefinition,
+  createSiteToolDefinition,
+  updateSiteToolDefinition,
+  handleGetSite,
+  handleListSites,
+  handleCreateSite,
+  handleUpdateSite,
+} from './tools/sites.js';
+
+// ... other imports
+
+const tools = [
+  getCustomerToolDefinition,
+  listCustomersToolDefinition,
+  createCustomerToolDefinition,
+  updateCustomerToolDefinition,
+  getSiteToolDefinition,
+  listSitesToolDefinition,
+  // ...
+];
+```
+
 ---
 
 ## Implementation Phases
 
-### Phase 1: Refactor Tool Structure ✅ COMPLETED (Customers)
+### Phase 1: Refactor Tool Structure 🔄 IN PROGRESS
 
-**Goal**: Reorganize tools into entity-based subdirectories
+**Goal**: Consolidate entity operations into single files and extract shared schemas
 
 #### Tasks:
 
-1. **Create new directory structure**
-   - [x] ✅ Create `customers/` subdirectory
-   - [x] ✅ Create `index.ts` in customers subdirectory
-   - [ ] Create remaining subdirectories: `jobs/`, `quotes/`, `sites/`, `users/`, `time-entries/`, `shared/`
+1. **Create shared schemas**
+   - [ ] Create `src/tools/schemas.ts`
+   - [ ] Extract `addressSchema` (used in customers, sites, jobs)
+   - [ ] Extract `contactSchema` (used in customers, sites)
+   - [ ] Extract `contactItemSchema` (used in contact arrays)
+   - [ ] Document each schema with JSDoc comments
 
-2. **Create shared utilities**
-   - [ ] Create `src/tools/shared/types.ts` (not needed yet)
-   - [ ] Create `src/tools/shared/response-builder.ts` (deferred)
-   - [ ] Create `src/tools/shared/template-paths.ts` (deferred)
+2. **Consolidate customer tools**
+   - [ ] Create `src/tools/customers.ts`
+   - [ ] Migrate `get-customer.ts` → `customers.ts`
+   - [ ] Migrate `list-customers.ts` → `customers.ts`
+   - [ ] Migrate `create-customer.ts` → `customers.ts`
+   - [ ] Migrate `update-customer.ts` → `customers.ts`
+   - [ ] Replace duplicated schemas with imports from `schemas.ts`
+   - [ ] Delete `src/tools/customers/` directory
+   - [ ] Update imports in `src/server.ts` to use direct imports (no barrel exports)
 
-3. **Move tools to subdirectories**
-   - [x] ✅ Move customer tools to `customers/` (get, list, create, update)
-   - [ ] Move job tools to `jobs/`
-   - [ ] Move quote tools to `quotes/`
-   - [ ] Move site tools to `sites/`
-   - [ ] Move user tools to `users/`
-   - [ ] Move time entry tools to `time-entries/`
+3. **Consolidate site tools**
+   - [ ] Create `src/tools/sites.ts`
+   - [ ] Migrate `get-site.ts` → `sites.ts`
+   - [ ] Migrate `list-sites.ts` → `sites.ts`
+   - [ ] Migrate `create-site.ts` → `sites.ts`
+   - [ ] Migrate `update-site.ts` → `sites.ts`
+   - [ ] Replace duplicated schemas with imports from `schemas.ts`
+   - [ ] Update imports in `src/server.ts`
 
-4. **Update tool files**
-   - [x] ✅ Update imports for customer tools in `src/server.ts`
-   - [x] ✅ Use barrel export from customers subdirectory
-   - [ ] Add `structuredContent` to remaining list tools (sites/users already have it)
+4. **Consolidate job tools**
+   - [ ] Create `src/tools/jobs.ts`
+   - [ ] Migrate `get-job.ts` → `jobs.ts`
+   - [ ] Migrate `list-jobs.ts` → `jobs.ts`
+   - [ ] Migrate `create-job.ts` → `jobs.ts`
+   - [ ] Migrate `update-job.ts` → `jobs.ts`
+   - [ ] Migrate `finalize-job.ts` → `jobs.ts`
+   - [ ] Update imports in `src/server.ts`
 
-5. **Update `src/server.ts`**
-   - [x] ✅ Update imports to use `./tools/customers/index.js`
-   - [x] ✅ Using barrel exports for customer tools
+5. **Consolidate quote tools**
+   - [ ] Create `src/tools/quotes.ts`
+   - [ ] Migrate `get-quote.ts` → `quotes.ts`
+   - [ ] Migrate `get-quote-detail.ts` → `quotes.ts`
+   - [ ] Migrate `list-quotes.ts` → `quotes.ts`
+   - [ ] Migrate `create-quote.ts` → `quotes.ts`
+   - [ ] Migrate `update-quote.ts` → `quotes.ts`
+   - [ ] Migrate `update-quote-version.ts` → `quotes.ts`
+   - [ ] Update imports in `src/server.ts`
 
-6. **Test refactored structure**
-   - [x] ✅ Build successfully: `pnpm build`
-   - [x] ✅ HTTP mode tested and working
+6. **Consolidate user tools**
+   - [ ] Create `src/tools/users.ts`
+   - [ ] Migrate `get-user.ts` → `users.ts`
+   - [ ] Migrate `list-users.ts` → `users.ts`
+   - [ ] Migrate `update-user.ts` → `users.ts`
+   - [ ] Update imports in `src/server.ts`
+
+7. **Consolidate time entry tools**
+   - [ ] Create `src/tools/time-entries.ts`
+   - [ ] Migrate `get-time-entry.ts` → `time-entries.ts`
+   - [ ] Migrate `list-time-entries.ts` → `time-entries.ts`
+   - [ ] Update imports in `src/server.ts`
+
+8. **Test refactored structure**
+   - [ ] Build successfully: `pnpm build`
+   - [ ] HTTP mode tested and working
+   - [ ] All 20 tools still functional
+   - [ ] Verify reduced code duplication (especially schemas)
 
 **Success Criteria**:
-- ✅ Customer tools organized by entity type
-- ⏳ Shared utilities (deferred until more entities refactored)
+- ✅ All tools consolidated into entity files (customers.ts, sites.ts, etc.)
+- ✅ Shared schemas extracted to `schemas.ts`
+- ✅ No barrel exports (direct imports only)
 - ✅ All imports working, builds successfully
 - ✅ No functionality broken
+- ✅ Reduced schema duplication by ~200+ lines
 
 ---
 
@@ -505,11 +675,20 @@ fergus-mcp/
 
 ### Architecture Decisions Made
 
-1. **Incremental Rollout**: Started with customers only, not all entities
-2. **Deferred Shared Utilities**: Will create when more entities are refactored
-3. **Inline JavaScript**: Templates have inline scripts, can extract later
-4. **MCP Resources**: Using MCP protocol to serve templates (not external CDN)
-5. **Barrel Exports**: Using `index.ts` in subdirectories for cleaner imports
+1. **One File Per Entity**: All operations for an entity in a single file (e.g., `customers.ts` contains get, list, create, update)
+   - **Rationale**: Eliminates schema duplication (100+ lines saved), keeps related code together, reasonable file sizes (~400-500 lines)
+
+2. **Shared Schemas File**: Common schemas (address, contact) extracted to `src/tools/schemas.ts`
+   - **Rationale**: Address schema alone was duplicated 4+ times across customers/sites/jobs (60 lines × 4 = 240 lines saved)
+
+3. **No Barrel Exports**: Direct imports from entity files
+   - **Rationale**: Better tree-shaking, faster builds, clearer dependencies, avoids circular dependency risks
+
+4. **Inline JavaScript in Templates**: Templates have embedded scripts, not extracted to separate files yet
+   - **Rationale**: Simplicity for Phase 1-5, can extract to React components in Phase 6
+
+5. **MCP Resources**: Using MCP protocol to serve templates (not external CDN)
+   - **Rationale**: Templates bundled with server, version controlled, works offline, no external dependencies
 
 ---
 
@@ -713,38 +892,81 @@ fergus-mcp/
 
 **Decision**: Start simple, iterate based on user feedback
 
-### 3. Shared Utility Location
+### 3. File Organization: One File Per Entity vs Multiple Files
 
-**Option A: `src/tools/shared/`**
-- Tool-specific utilities
-- Clearer separation
+**Option A: One File Per Entity** (Recommended):
+```typescript
+// src/tools/customers.ts (400-500 lines)
+export const getCustomerToolDefinition = { ... };
+export async function handleGetCustomer(...) { ... }
 
-**Option B: `src/shared/` or `src/utils/`**
-- Project-wide utilities
-- Could be used by other parts of codebase
+export const listCustomersToolDefinition = { ... };
+export async function handleListCustomers(...) { ... }
 
-**Decision**: Use `src/tools/shared/` initially, can refactor later if needed
+export const createCustomerToolDefinition = {
+  inputSchema: {
+    properties: {
+      mainContact: contactSchema,     // Reused from schemas.ts
+      physicalAddress: addressSchema, // Reused from schemas.ts
+    }
+  }
+};
+export async function handleCreateCustomer(...) { ... }
+```
 
-### 4. Barrel Exports vs Direct Imports
+**Pros:**
+- ✅ Eliminates 100+ lines of schema duplication
+- ✅ Related code stays together
+- ✅ Single place to update entity-related schemas
+- ✅ File sizes remain manageable (~400-500 lines)
 
-**Barrel Exports** (using `index.ts` in each subdirectory):
+**Option B: Separate Files Per Operation**:
+```typescript
+// src/tools/customers/get-customer.ts
+// src/tools/customers/list-customers.ts
+// src/tools/customers/create-customer.ts
+// src/tools/customers/update-customer.ts
+```
+
+**Cons:**
+- ❌ Schema duplication (60+ lines per file)
+- ❌ More files to navigate
+- ❌ Requires either barrel exports (slow builds) or verbose imports
+
+**Decision**: Use Option A (One File Per Entity)
+
+### 4. Import Strategy: Direct Imports vs Barrel Exports
+
+**Direct Imports** (Recommended):
+```typescript
+// src/server.ts
+import {
+  getCustomerToolDefinition,
+  listCustomersToolDefinition,
+  createCustomerToolDefinition,
+  updateCustomerToolDefinition,
+} from './tools/customers.js';
+```
+
+**Pros:**
+- ✅ Better tree-shaking (only imports what's used)
+- ✅ Faster builds (TypeScript doesn't parse entire dependency trees)
+- ✅ No circular dependency risk
+- ✅ Clear dependency graph
+
+**Barrel Exports** (Rejected):
 ```typescript
 // src/tools/customers/index.ts
 export * from './get-customer.js';
 export * from './list-customers.js';
 
-// src/server.ts
-import { getCustomerToolDefinition, listCustomersToolDefinition } from './tools/customers/index.js';
+// Problems:
+// - Slower builds (parses all files even if only one is used)
+// - Can break tree-shaking in some bundlers
+// - Obscures actual dependencies
 ```
 
-**Direct Imports**:
-```typescript
-// src/server.ts
-import { getCustomerToolDefinition } from './tools/customers/get-customer.js';
-import { listCustomersToolDefinition } from './tools/customers/list-customers.js';
-```
-
-**Decision**: Use barrel exports for cleaner imports, but document that they can slow down builds in very large codebases
+**Decision**: Use Direct Imports (no barrel exports)
 
 ---
 
