@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const getQuoteToolDefinition = {
   name: 'get-quote',
   description: 'Get details of a specific quote by ID',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const listQuotesToolDefinition = {
   name: 'list-quotes',
   description: 'List quotes across all jobs with optional filtering',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

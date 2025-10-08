@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const getTimeEntryToolDefinition = {
   name: 'get-time-entry',
   description: 'Get details of a specific time entry by ID',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

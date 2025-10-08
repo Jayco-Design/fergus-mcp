@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const getJobToolDefinition = {
   name: 'get-job',
   description: 'Get details for a specific job by ID',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

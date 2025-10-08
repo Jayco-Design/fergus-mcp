@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const listTimeEntriesToolDefinition = {
   name: 'list-time-entries',
   description: 'List time entries with optional filtering by user, job, and date range',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

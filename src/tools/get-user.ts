@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const getUserToolDefinition = {
   name: 'get-user',
   description: 'Get details of a specific user by ID',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

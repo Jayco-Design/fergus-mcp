@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const listUsersToolDefinition = {
   name: 'list-users',
   description: 'List users/team members with optional filtering by name, email, user type, and status',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {
@@ -84,14 +87,41 @@ export async function handleListUsers(
   if (filterStatus) params.append('filterStatus', filterStatus);
 
   const endpoint = `/users?${params.toString()}`;
-  const users = await fergusClient.get(endpoint);
+  const response = await fergusClient.get(endpoint) as any;
+
+  // Extract users array from response
+  const users = Array.isArray(response) ? response : (response.data || response.users || []);
+  const totalCount = response.total || response.totalCount || users.length;
+  const nextCursor = response.nextCursor || response.pageCursor || null;
+
+  // Create a concise text summary
+  const summary = `Found ${users.length} user(s)${totalCount > users.length ? ` of ${totalCount} total` : ''}`;
+
+  // Structure the data for better ChatGPT consumption
+  const structuredUsers = users.map((user: any) => ({
+    id: user.id || user.userId,
+    name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+    email: user.email || user.contactItems?.find((c: any) => c.type === 'email')?.value,
+    userType: user.userType,
+    status: user.status,
+    chargeOutRate: user.chargeOutRate,
+  }));
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(users, null, 2),
+        text: `${summary}\n\n${JSON.stringify(structuredUsers, null, 2)}`,
       },
     ],
+    // Structured content for ChatGPT Apps to consume
+    structuredContent: {
+      users: structuredUsers,
+      pagination: {
+        count: users.length,
+        total: totalCount,
+        nextCursor,
+      },
+    },
   };
 }

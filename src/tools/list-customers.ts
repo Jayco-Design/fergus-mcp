@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const listCustomersToolDefinition = {
   name: 'list-customers',
   description: 'List customers with optional search filtering',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const getCustomerToolDefinition = {
   name: 'get-customer',
   description: 'Get details of a specific customer by ID',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

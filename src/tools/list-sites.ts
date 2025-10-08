@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const listSitesToolDefinition = {
   name: 'list-sites',
   description: 'List sites with optional search and filtering',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {
@@ -88,14 +91,48 @@ export async function handleListSites(
   if (filterAddressPostalCode) params.append('filterAddressPostalCode', filterAddressPostalCode);
 
   const endpoint = `/sites?${params.toString()}`;
-  const sites = await fergusClient.get(endpoint);
+  const response = await fergusClient.get(endpoint) as any;
+
+  // Extract sites array from response
+  const sites = Array.isArray(response) ? response : (response.data || response.sites || []);
+  const totalCount = response.total || response.totalCount || sites.length;
+  const nextCursor = response.nextCursor || response.pageCursor || null;
+
+  // Create a concise text summary
+  const summary = `Found ${sites.length} site(s)${totalCount > sites.length ? ` of ${totalCount} total` : ''}`;
+
+  // Structure the data for better ChatGPT consumption
+  const structuredSites = sites.map((site: any) => ({
+    id: site.id || site.siteId,
+    name: site.name,
+    address: {
+      line1: site.siteAddress?.line1 || site.address?.line1,
+      city: site.siteAddress?.city || site.address?.city,
+      postalCode: site.siteAddress?.postalCode || site.address?.postalCode,
+      country: site.siteAddress?.country || site.address?.country,
+    },
+    defaultContact: site.defaultContact ? {
+      name: site.defaultContact.name,
+      email: site.defaultContact.email,
+      phone: site.defaultContact.phone,
+    } : null,
+  }));
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(sites, null, 2),
+        text: `${summary}\n\n${JSON.stringify(structuredSites, null, 2)}`,
       },
     ],
+    // Structured content for ChatGPT Apps to consume
+    structuredContent: {
+      sites: structuredSites,
+      pagination: {
+        count: sites.length,
+        total: totalCount,
+        nextCursor,
+      },
+    },
   };
 }

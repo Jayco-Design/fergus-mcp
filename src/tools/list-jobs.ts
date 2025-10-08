@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const listJobsToolDefinition = {
   name: 'list-jobs',
   description: 'List all jobs with optional filtering and sorting',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

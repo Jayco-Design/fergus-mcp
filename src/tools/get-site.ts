@@ -8,6 +8,9 @@ import { FergusClient } from '../fergus-client.js';
 export const getSiteToolDefinition = {
   name: 'get-site',
   description: 'Get details of a specific site by ID',
+  annotations: {
+    readOnlyHint: true
+  },
   inputSchema: {
     type: 'object',
     properties: {

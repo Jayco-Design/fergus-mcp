@@ -345,7 +345,8 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       sessionManager.updateLastAccessed(sessionId);
     } else if (!sessionId && isInitializeRequest(req.body)) {
       // New initialization request
-      // Check for Bearer token in Authorization header
+      // ChatGPT needs unauthenticated access to discover tools
+      // Check for Bearer token in Authorization header (optional for discovery)
       const authHeader = req.headers.authorization;
       let oauthSessionId: string | undefined;
 
@@ -353,37 +354,24 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         oauthSessionId = authHeader.substring(7);
       }
 
-      if (!oauthSessionId || !tokenManager.hasTokens(oauthSessionId)) {
-        // No OAuth tokens available - need authentication
-        const baseUrl = config.publicUrl || `https://${req.get('host')}`;
-        const authUrl = `${baseUrl}/oauth/authorize`;
-
-        res.status(401).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32001,
-            message: 'Authentication required',
-            data: {
-              authorizationUrl: authUrl,
+      // Create FergusClient - use OAuth if available, otherwise null (for discovery only)
+      const fergusClient = (oauthSessionId && tokenManager.hasTokens(oauthSessionId))
+        ? new FergusClient({
+            tokenProvider: async () => {
+              const token = await tokenManager.getAccessToken(oauthSessionId);
+              return token;
             },
-          },
-          id: (req.body as any).id || null,
-        });
-        return;
-      }
+            baseUrl: config.fergusBaseUrl,
+          })
+        : new FergusClient({
+            // Unauthenticated mode - will fail on actual tool calls
+            tokenProvider: async () => null,
+            baseUrl: config.fergusBaseUrl,
+          });
 
-      console.error(`[MCP] Initializing new session using OAuth session ${oauthSessionId}`);
+      console.error(`[MCP] Initializing new session${oauthSessionId ? ` using OAuth session ${oauthSessionId}` : ' (unauthenticated discovery mode)'}`);
 
       try {
-        // Create FergusClient with token provider using OAuth session
-        const fergusClient = new FergusClient({
-          tokenProvider: async () => {
-            const token = await tokenManager.getAccessToken(oauthSessionId);
-            return token;
-          },
-          baseUrl: config.fergusBaseUrl,
-        });
-
         // Generate new MCP session ID (different from OAuth session)
         const mcpSessionId = randomUUID();
 
