@@ -11,7 +11,7 @@ services:
     name: fergus-mcp-server
     runtime: node
     region: oregon # choose your preferred region
-    plan: free # optional (defaults to starter)
+    plan: starter
     buildCommand: pnpm install && pnpm run build
     startCommand: pnpm run start:http
     envVars:
