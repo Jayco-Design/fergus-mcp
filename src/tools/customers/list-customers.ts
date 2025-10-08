@@ -116,9 +116,6 @@ export async function handleListCustomers(
   const totalCount = response.total || response.totalCount || customers.length;
   const nextCursor = response.nextCursor || response.pageCursor || null;
 
-  // Create a concise text summary
-  const summary = `Found ${customers.length} customer(s)${totalCount > customers.length ? ` of ${totalCount} total` : ''}`;
-
   // Structure the data for better ChatGPT consumption
   const structuredCustomers = customers.map((customer: any) => ({
     id: customer.id || customer.customerId,
@@ -133,11 +130,15 @@ export async function handleListCustomers(
     } : null,
   }));
 
+  // When using outputTemplate, return minimal text content
+  // The visual template will show the data
+  const summary = `Found ${customers.length} customer(s)${totalCount > customers.length ? ` of ${totalCount} total` : ''}`;
+
   return {
     content: [
       {
         type: 'text' as const,
-        text: `${summary}\n\n${JSON.stringify(structuredCustomers, null, 2)}`,
+        text: summary, // Just the summary, not the full JSON
       },
     ],
     // Structured content for ChatGPT Apps to consume

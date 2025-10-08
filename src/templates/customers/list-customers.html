@@ -128,18 +128,32 @@
 
     // Listen for data from ChatGPT Apps SDK
     window.addEventListener('openai:set_globals', (event) => {
-      console.log('[Fergus MCP] openai:set_globals event:', event.detail);
-      const structuredContent = event.detail?.toolOutput?.structuredContent;
+      console.log('[Fergus MCP] openai:set_globals event received');
+      console.log('[Fergus MCP] event:', event);
+      console.log('[Fergus MCP] event.detail:', event.detail);
+      console.log('[Fergus MCP] window.openai after event:', window.openai);
+
+      // Try accessing from updated window.openai (event updates the global)
+      const structuredContent = window.openai?.toolOutput?.structuredContent;
+      console.log('[Fergus MCP] structuredContent from window.openai:', structuredContent);
+
       if (structuredContent) {
+        console.log('[Fergus MCP] Rendering with data:', structuredContent);
         render(structuredContent);
+      } else {
+        console.warn('[Fergus MCP] No structuredContent found after event');
       }
     });
 
-    // Also render immediately if data is already available (for compatibility)
+    // Also check immediately on load
+    console.log('[Fergus MCP] Template loaded, checking for initial data');
+    console.log('[Fergus MCP] window.openai on load:', window.openai);
     const initialData = window.openai?.toolOutput?.structuredContent;
     if (initialData) {
-      console.log('[Fergus MCP] Initial data available:', initialData);
+      console.log('[Fergus MCP] Initial data available, rendering:', initialData);
       render(initialData);
+    } else {
+      console.log('[Fergus MCP] No initial data, waiting for openai:set_globals event');
     }
   </script>
 </body>
