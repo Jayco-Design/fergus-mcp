@@ -9,8 +9,12 @@ export const getCustomerToolDefinition = {
   name: 'get-customer',
   description: 'Get details of a specific customer by ID',
   annotations: {
-    readOnlyHint: true,
-    'openai/outputTemplate': 'ui://customers/customer-detail.html'
+    readOnlyHint: true
+  },
+  _meta: {
+    'openai/outputTemplate': 'ui://customers/customer-detail.html',
+    'openai/toolInvocation/invoking': 'Loading customer details...',
+    'openai/toolInvocation/invoked': 'Customer details loaded'
   },
   inputSchema: {
     type: 'object',

@@ -9,8 +9,12 @@ export const listCustomersToolDefinition = {
   name: 'list-customers',
   description: 'List customers with optional search filtering',
   annotations: {
-    readOnlyHint: true,
-    'openai/outputTemplate': 'ui://customers/list-customers.html'
+    readOnlyHint: true
+  },
+  _meta: {
+    'openai/outputTemplate': 'ui://customers/list-customers.html',
+    'openai/toolInvocation/invoking': 'Loading customers...',
+    'openai/toolInvocation/invoked': 'Showing customers'
   },
   inputSchema: {
     type: 'object',
