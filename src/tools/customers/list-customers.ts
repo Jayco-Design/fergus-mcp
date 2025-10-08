@@ -15,7 +15,7 @@ export const listCustomersToolDefinition = {
   _meta: {
     'openai/outputTemplate': 'ui://customers/list-customers.html',
     'openai/toolInvocation/invoking': 'Loading customers...',
-    'openai/toolInvocation/invoked': '' // Empty - might suppress ChatGPT's summary
+    'openai/toolInvocation/invoked': 'Got customers'
   },
   inputSchema: {
     type: 'object',

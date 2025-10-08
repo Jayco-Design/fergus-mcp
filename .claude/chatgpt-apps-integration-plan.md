@@ -5,16 +5,16 @@
 This plan outlines the refactoring and enhancement of the Fergus MCP server to provide a rich, structured experience for ChatGPT Apps with visual UI components.
 
 **Created**: 2025-10-08
-**Last Updated**: 2025-10-08
+**Last Updated**: 2025-10-09
 **Status**: ✅ Phases 1-4 Complete for Customers | Next: Sites, Jobs, Quotes Templates
 
 ---
 
 ## Current State
 
-- ✅ 26 tools functional via stdio and HTTP transports
+- ✅ 20 tools functional via stdio and HTTP transports (10 read, 10 action)
 - ✅ Unauthenticated tool discovery enabled for ChatGPT
-- ✅ Read-only annotations (`readOnlyHint: true`) added to 13 read-only tools
+- ✅ Read-only annotations (`readOnlyHint: true`) added to read-only tools
 - ✅ Customer tools refactored into `src/tools/customers/` subdirectory
 - ✅ Structured content implemented for:
   - `list-users` (users array + pagination)
@@ -22,13 +22,15 @@ This plan outlines the refactoring and enhancement of the Fergus MCP server to p
   - `list-customers` (customers array + pagination)
   - `get-customer` (customer detail object)
 - ✅ ChatGPT App templates created for customers:
-  - `templates/customers/list-customers.html` (table view)
+  - `templates/customers/list-customers.html` (grid/card view)
   - `templates/customers/customer-detail.html` (detail card)
   - `templates/shared/styles.css` (design system)
-- ✅ MCP resource server serving templates via `ui://` protocol
+- ✅ MCP resource server serving templates via `ui://` protocol (registerTemplateResources enabled)
 - ✅ Build process copies templates to `dist/` folder
 - ✅ Template metadata in `_meta` field (not annotations)
 - ✅ Resources capability enabled in server
+- ✅ Client detection working (`isChatGPT()` checks for `openai/userAgent`)
+- ✅ Template rendering issues fixed (check `window.openai?.toolOutput` before render)
 
 ---
 
@@ -340,7 +342,7 @@ fergus-mcp/
 2. **Update server capabilities**
    - [x] ✅ Update `src/server.ts`:
      - Added `resources: {}` to server capabilities
-     - Imported and called `registerTemplateResources(server)`
+     - Imported and called `registerTemplateResources(server)` (UNCOMMENTED - was causing "Method not found" errors)
      - Resources integrated alongside tools and prompts
 
 3. **Update build process**
@@ -354,12 +356,19 @@ fergus-mcp/
    - [x] ✅ Resource listing working
    - [x] ✅ Template content retrieval working
    - [x] ✅ Templates serving from `dist/templates/` after build
+   - [x] ✅ ChatGPT successfully loading and rendering templates
+
+5. **Fix template rendering issues**
+   - [x] ✅ Fixed initial render condition (check `window.openai?.toolOutput` not just `window.openai`)
+   - [x] ✅ Improved client detection (`isChatGPT()` checks for `openai/userAgent` presence)
+   - [x] ✅ Templates now render on initial load when data is available
 
 **Success Criteria**:
 - ✅ Templates served as MCP resources
 - ✅ ChatGPT can discover and load templates
 - ✅ Templates available at `ui://` URIs
 - ✅ Build process copies static files correctly
+- ✅ Templates render correctly with customer data
 
 ---
 

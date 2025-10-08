@@ -335,7 +335,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
   });
 
   // Register template resources for ChatGPT Apps
-  //registerTemplateResources(server);
+  registerTemplateResources(server);
 
   return server;
 }

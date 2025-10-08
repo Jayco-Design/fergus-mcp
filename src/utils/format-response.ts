@@ -3,42 +3,38 @@
  * Handles formatting structured content for different MCP clients
  */
 
-export interface FormattedResponse {
-  content?: Array<{ type: 'text'; text: string }>;
-  structuredContent?: any;
-  [key: string]: unknown; // Allow additional properties for MCP compatibility
-}
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /**
  * Check if the request is from ChatGPT based on _meta field
+ * ChatGPT provides a _meta object with openai/userAgent
+ * Claude does not provide a _meta object at all
  */
 export function isChatGPT(meta?: Record<string, any>): boolean {
-  if (!meta || !meta['openai/userAgent']) return false;
-  const userAgent = meta['openai/userAgent'];
-  return typeof userAgent === 'string' && userAgent.toLowerCase().includes('chatgpt');
+  // If _meta exists and has openai/userAgent, it's from ChatGPT
+  return !!(meta && meta['openai/userAgent']);
 }
 
 /**
- * Format structured content based on the client type
- * - ChatGPT: returns structuredContent only (for template rendering)
- * - Claude: returns text representation in content array
+ * Format structured content
  */
 export function formatResponse(
   structuredContent: any,
   meta?: Record<string, any>
-): FormattedResponse {
-  if (isChatGPT(meta)) {
-    // ChatGPT mode - return structured content only for template rendering
-    return { structuredContent };
+): CallToolResult {
+  // we double-up the response because of draft MCP schema
+
+  let content = {
+    type: 'text' as const,
+    text: JSON.stringify(structuredContent, null, 2)
   }
 
-  // MCP mode (Claude) - return as JSON in content array
+  if (isChatGPT(meta)) {
+    content.text = "Success"
+  }
+
   return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(structuredContent, null, 2)
-      }
-    ],
+    content: [content],
+    structuredContent,
   };
 }

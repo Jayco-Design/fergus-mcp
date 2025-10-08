@@ -3,6 +3,7 @@
  * Retrieves a specific customer by ID
  */
 
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { FergusClient } from '../../fergus-client.js';
 import { formatResponse, isChatGPT } from '../../utils/format-response.js';
 
@@ -79,7 +80,7 @@ export async function handleGetCustomer(
   fergusClient: FergusClient,
   args: { customerId: string },
   meta?: Record<string, any>
-) {
+): Promise<CallToolResult> {
   // Log client detection
   const isChatGPTClient = isChatGPT(meta);
   console.log('[get-customer] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude', meta?.['openai/userAgent'] || 'unknown');

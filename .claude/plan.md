@@ -404,9 +404,9 @@ This is a public repository. Recommend **MIT License** for maximum accessibility
 
 ---
 
-**Document Version**: 2.9
-**Last Updated**: 2025-10-08
-**Status**: Production Ready - Render Deployment Configured
+**Document Version**: 2.10
+**Last Updated**: 2025-10-09
+**Status**: Production Ready - ChatGPT Apps Integration Active
 
 **Next Engineer: Deploy to Render following DEPLOYMENT.md, or continue Phase 4 Advanced Features (Smart Completions, Notifications, Batch Operations)**
 
@@ -451,6 +451,7 @@ default:  // "active"
 **Status**: Endpoint should be implemented to match the PUT endpoint that exists at this path.
 
 ## Changelog
+- v2.10: **ChatGPT Apps Integration Active** - Fixed template resource serving by uncommenting `registerTemplateResources(server)` in server.ts. Fixed template rendering issues by updating initial render condition to check `window.openai?.toolOutput` instead of just `window.openai`. Improved client detection in `isChatGPT()` to simply check for presence of `openai/userAgent` meta field. Customer templates now fully functional in ChatGPT with list and detail views. Updated plans to reflect actual state: 20 tools total (10 read, 10 action), 4 tools with structuredContent, 2 tools with ChatGPT templates.
 - v2.9: **Production Deployment Ready** - Implemented Redis session storage with `RedisTokenManager` and `ITokenManager` interface for swappable storage backends. Created complete Render deployment configuration with `render.yaml` (Infrastructure as Code). Added comprehensive documentation: `DEPLOYMENT.md` (step-by-step guide), `RENDER_QUICKSTART.md` (quick reference). Updated `README.md` with deployment section. Server automatically selects in-memory or Redis storage based on environment. Graceful shutdown for Redis connections. Added `ioredis` dependency (v5.8.1). Project now production-ready for Render deployment with free tier Redis + Node.js web service. See `remote-mcp-plan.md` for complete remote server implementation details.
 - v2.8: **Phase 3 Enhanced - Quote Management Tools** - Added 3 new quote tools bringing total to 16 action tools: `get-quote-detail` (comprehensive quote data with all sections/line items), `update-quote` (update by quote ID), and `update-quote-version` (update by version number). Discovered and documented two Fergus API bugs: (1) update quote endpoints require title/description or generate invalid SQL, (2) missing GET endpoint for quote by version number. Implemented workarounds for both bugs. Added prominent warnings to update tools about replacing ALL sections to prevent data loss.
 - v2.7: **Phase 4.1 COMPLETED** - Implemented MCP Prompts for common workflows: job-creation-assistant (guides through draft→finalized workflow), quote-generator (helps structure quotes with sections/line items), and weekly-report (generates comprehensive status reports). Prompts capability added to server with ListPromptsRequestSchema and GetPromptRequestSchema handlers.

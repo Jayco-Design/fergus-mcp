@@ -159,11 +159,15 @@
 
     // Initial render on load (in case data is already available)
     console.log('[Fergus MCP] Template loaded');
-    console.log('[Fergus MCP] window.openai:', window.openai);
+    console.log('[Fergus MCP] window.openai on load:', window.openai);
+    console.log('[Fergus MCP] window.openai.toolOutput on load:', window.openai?.toolOutput);
 
     // Try rendering immediately if window.openai exists
-    if (window.openai) {
+    if (window.openai?.toolOutput) {
+      console.log('[Fergus MCP] Initial data found, rendering immediately');
       render();
+    } else {
+      console.log('[Fergus MCP] No initial data, waiting for openai:set_globals event');
     }
   </script>
 </body>
