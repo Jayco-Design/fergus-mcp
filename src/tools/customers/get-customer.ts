@@ -26,6 +26,52 @@ export const getCustomerToolDefinition = {
     },
     required: ['customerId'],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      customer: {
+        type: 'object',
+        properties: {
+          id: { type: ['number', 'string'] },
+          name: { type: 'string' },
+          customerFullName: { type: 'string' },
+          email: { type: ['string', 'null'] },
+          phone: { type: ['string', 'null'] },
+          mainContact: {
+            type: ['object', 'null'],
+            properties: {
+              name: { type: 'string' },
+              email: { type: 'string' },
+              phone: { type: 'string' },
+              position: { type: 'string' },
+            },
+          },
+          physicalAddress: {
+            type: ['object', 'null'],
+            properties: {
+              line1: { type: 'string' },
+              line2: { type: 'string' },
+              city: { type: 'string' },
+              state: { type: 'string' },
+              postalCode: { type: 'string' },
+              country: { type: 'string' },
+            },
+          },
+          postalAddress: {
+            type: ['object', 'null'],
+            properties: {
+              line1: { type: 'string' },
+              line2: { type: 'string' },
+              city: { type: 'string' },
+              state: { type: 'string' },
+              postalCode: { type: 'string' },
+              country: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  },
 };
 
 export async function handleGetCustomer(

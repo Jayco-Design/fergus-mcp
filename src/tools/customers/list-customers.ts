@@ -46,6 +46,40 @@ export const listCustomersToolDefinition = {
       },
     },
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      customers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: ['number', 'string'] },
+            name: { type: 'string' },
+            email: { type: ['string', 'null'] },
+            phone: { type: ['string', 'null'] },
+            address: {
+              type: ['object', 'null'],
+              properties: {
+                line1: { type: 'string' },
+                city: { type: 'string' },
+                postalCode: { type: 'string' },
+                country: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      pagination: {
+        type: 'object',
+        properties: {
+          count: { type: 'number' },
+          total: { type: 'number' },
+          nextCursor: { type: ['string', 'null'] },
+        },
+      },
+    },
+  },
 };
 
 export async function handleListCustomers(
