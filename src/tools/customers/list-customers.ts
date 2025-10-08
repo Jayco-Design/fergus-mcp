@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../../fergus-client.js';
+import { formatResponse, isChatGPT } from '../../utils/format-response.js';
 
 export const listCustomersToolDefinition = {
   name: 'list-customers',
@@ -90,8 +91,13 @@ export async function handleListCustomers(
     sortField?: string;
     sortOrder?: string;
     pageCursor?: string;
-  }
+  },
+  meta?: Record<string, any>
 ) {
+  // Log client detection
+  const isChatGPTClient = isChatGPT(meta);
+  console.log('[list-customers] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude', meta?.['openai/userAgent'] || 'unknown');
+
   const {
     filterSearchText,
     pageSize = 10,
@@ -117,35 +123,39 @@ export async function handleListCustomers(
   const nextCursor = response.nextCursor || response.pageCursor || null;
 
   // Structure the data for better ChatGPT consumption
-  const structuredCustomers = customers.map((customer: any) => ({
-    id: customer.id || customer.customerId,
-    name: customer.customerFullName || customer.name,
-    email: customer.mainContact?.email || customer.email,
-    phone: customer.mainContact?.phone || customer.phone,
-    address: customer.physicalAddress ? {
-      line1: customer.physicalAddress.line1,
-      city: customer.physicalAddress.city,
-      postalCode: customer.physicalAddress.postalCode,
-      country: customer.physicalAddress.country,
-    } : null,
-  }));
+  const structuredCustomers = customers.map((customer: any) => {
+    // Extract email and phone from mainContact.contactItems
+    const contactItems = customer.mainContact?.contactItems || [];
+    const emailItem = contactItems.find((c: any) => c.contactType === 'email');
+    const phoneItem = contactItems.find((c: any) => c.contactType === 'phone' || c.contactType === 'mobile');
 
-  // Return minimal content - the widget shows everything
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: `✓ Found ${customers.length} customer${customers.length !== 1 ? 's' : ''}`,
-      },
-    ],
-    // Structured content for ChatGPT Apps to consume
-    structuredContent: {
-      customers: structuredCustomers,
-      pagination: {
-        count: customers.length,
-        total: totalCount,
-        nextCursor,
-      },
+    return {
+      id: customer.id || customer.customerId,
+      name: customer.customerFullName || customer.name,
+      email: emailItem?.contactValue || customer.email,
+      phone: phoneItem?.contactValue || customer.phone,
+      address: customer.physicalAddress ? {
+        line1: customer.physicalAddress.address1,
+        line2: customer.physicalAddress.address2,
+        suburb: customer.physicalAddress.addressSuburb,
+        city: customer.physicalAddress.addressCity,
+        region: customer.physicalAddress.addressRegion,
+        postalCode: customer.physicalAddress.addressPostcode,
+        country: customer.physicalAddress.addressCountry,
+      } : null,
+    };
+  });
+
+  // Build structured content
+  const structuredContent = {
+    customers: structuredCustomers,
+    pagination: {
+      count: customers.length,
+      total: totalCount,
+      nextCursor,
     },
   };
+
+  // Format response based on client type
+  return formatResponse(structuredContent, meta);
 }

@@ -37,7 +37,7 @@ export interface OAuthConfig {
 
 export interface SessionConfig {
   timeoutMs: number;
-  storage: 'memory' | 'redis';
+  storage: 'memory' | 'redis' | 'file';
   redisUrl?: string;
 }
 

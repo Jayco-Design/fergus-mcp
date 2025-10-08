@@ -13,6 +13,7 @@ import { createMcpServer } from '../server.js';
 import { SessionManager } from '../auth/session-manager.js';
 import { TokenManager } from '../auth/token-manager.js';
 import { RedisTokenManager } from '../auth/redis-token-manager.js';
+import { FileTokenManager } from '../auth/file-token-manager.js';
 import { generateAuthUrl, exchangeCodeForTokens, generateState, generatePKCE } from '../auth/oauth-handler.js';
 import { HttpOAuthConfig } from '../config.js';
 
@@ -51,11 +52,17 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
   const sessionManager = new SessionManager(config.session);
 
   // Initialize token manager based on session storage type
-  const tokenManager = config.session.storage === 'redis' && config.session.redisUrl
-    ? new RedisTokenManager(config.oauth, config.session.redisUrl)
-    : new TokenManager(config.oauth);
-
-  console.error(`[HTTP OAuth Server] Token storage: ${config.session.storage}`);
+  let tokenManager;
+  if (config.session.storage === 'redis' && config.session.redisUrl) {
+    tokenManager = new RedisTokenManager(config.oauth, config.session.redisUrl);
+    console.error(`[HTTP OAuth Server] Token storage: redis`);
+  } else if (config.session.storage === 'file' || process.env.NODE_ENV === 'development') {
+    tokenManager = new FileTokenManager(config.oauth);
+    console.error(`[HTTP OAuth Server] Token storage: file (persistent across restarts)`);
+  } else {
+    tokenManager = new TokenManager(config.oauth);
+    console.error(`[HTTP OAuth Server] Token storage: memory (ephemeral)`);
+  }
 
   // Configure CORS
   app.use(cors({

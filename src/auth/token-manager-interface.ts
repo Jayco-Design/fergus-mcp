@@ -5,6 +5,9 @@
 
 import { OAuthTokens } from './oauth-handler.js';
 
+// Re-export OAuthTokens for convenience
+export type { OAuthTokens };
+
 export interface ITokenManager {
   storeTokens(sessionId: string, tokens: OAuthTokens): void | Promise<void>;
   getAccessToken(sessionId: string): Promise<string | null>;

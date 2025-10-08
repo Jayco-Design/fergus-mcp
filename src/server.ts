@@ -142,7 +142,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
    * Handler for tool execution
    */
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+    const { name, arguments: args, _meta } = request.params;
 
     try {
       switch (name) {
@@ -187,7 +187,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
           });
 
         case 'get-customer':
-          return await handleGetCustomer(fergusClient, args as { customerId: string });
+          return await handleGetCustomer(fergusClient, args as { customerId: string }, _meta);
 
         case 'list-customers':
           return await handleListCustomers(fergusClient, args as {
@@ -196,7 +196,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
             sortField?: string;
             sortOrder?: string;
             pageCursor?: string;
-          });
+          }, _meta);
 
         case 'get-site':
           return await handleGetSite(fergusClient, args as { siteId: string });
@@ -224,7 +224,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
             sortOrder?: string;
             filterUserType?: string;
             filterStatus?: string;
-          });
+          }, _meta);
 
         case 'create-job':
           return await handleCreateJob(fergusClient, args as {
@@ -335,7 +335,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
   });
 
   // Register template resources for ChatGPT Apps
-  registerTemplateResources(server);
+  //registerTemplateResources(server);
 
   return server;
 }

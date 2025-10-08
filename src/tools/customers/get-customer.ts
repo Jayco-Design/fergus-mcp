@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../../fergus-client.js';
+import { formatResponse, isChatGPT } from '../../utils/format-response.js';
 
 export const getCustomerToolDefinition = {
   name: 'get-customer',
@@ -76,8 +77,13 @@ export const getCustomerToolDefinition = {
 
 export async function handleGetCustomer(
   fergusClient: FergusClient,
-  args: { customerId: string }
+  args: { customerId: string },
+  meta?: Record<string, any>
 ) {
+  // Log client detection
+  const isChatGPTClient = isChatGPT(meta);
+  console.log('[get-customer] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude', meta?.['openai/userAgent'] || 'unknown');
+
   const { customerId } = args;
 
   if (!customerId) {
@@ -98,16 +104,11 @@ export async function handleGetCustomer(
     customerFullName: customer.customerFullName,
   };
 
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: `Showing details for ${structuredCustomer.name || 'customer'} in the widget above.`,
-      },
-    ],
-    // Structured content for ChatGPT Apps template
-    structuredContent: {
-      customer: structuredCustomer,
-    },
+  // Build structured content
+  const structuredContent = {
+    customer: structuredCustomer,
   };
+
+  // Format response based on client type
+  return formatResponse(structuredContent, meta);
 }

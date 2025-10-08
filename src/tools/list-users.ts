@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { formatResponse, isChatGPT } from '../utils/format-response.js';
 
 export const listUsersToolDefinition = {
   name: 'list-users',
@@ -64,8 +65,13 @@ export async function handleListUsers(
     filterUserType?: string;
     filterStatus?: string;
     pageCursor?: string;
-  }
+  },
+  meta?: Record<string, any>
 ) {
+  // Log client detection
+  const isChatGPTClient = isChatGPT(meta);
+  console.log('[list-users] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude', meta?.['openai/userAgent'] || 'unknown');
+
   const {
     filterSearchText,
     pageSize = 10,
@@ -107,21 +113,16 @@ export async function handleListUsers(
     chargeOutRate: user.chargeOutRate,
   }));
 
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: `${summary}\n\n${JSON.stringify(structuredUsers, null, 2)}`,
-      },
-    ],
-    // Structured content for ChatGPT Apps to consume
-    structuredContent: {
-      users: structuredUsers,
-      pagination: {
-        count: users.length,
-        total: totalCount,
-        nextCursor,
-      },
+  // Build structured content
+  const structuredContent = {
+    users: structuredUsers,
+    pagination: {
+      count: users.length,
+      total: totalCount,
+      nextCursor,
     },
   };
+
+  // Format response based on client type
+  return formatResponse(structuredContent, meta);
 }

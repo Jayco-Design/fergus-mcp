@@ -16,28 +16,28 @@ const __dirname = path.dirname(__filename);
 /**
  * Template definitions
  */
-const TEMPLATES = [
-  {
-    uri: 'ui://customers/list-customers.html',
-    name: 'Customer List Template',
-    description: 'Table view of customers with contact and location information',
-    mimeType: 'text/html',
-    filePath: 'customers/list-customers.html',
-  },
-  {
-    uri: 'ui://customers/customer-detail.html',
-    name: 'Customer Detail Template',
-    description: 'Detailed view of a single customer with full contact and address information',
-    mimeType: 'text/html',
-    filePath: 'customers/customer-detail.html',
-  },
-  {
-    uri: 'ui://shared/styles.css',
-    name: 'Shared Styles',
-    description: 'Common CSS styles for all templates',
-    mimeType: 'text/css',
-    filePath: 'shared/styles.css',
-  },
+const TEMPLATES: any[] = [
+  // {
+  //   uri: 'ui://customers/list-customers.html',
+  //   name: 'Customer List Template',
+  //   description: 'Table view of customers with contact and location information',
+  //   mimeType: 'text/html',
+  //   filePath: 'customers/list-customers.html',
+  // },
+  // {
+  //   uri: 'ui://customers/customer-detail.html',
+  //   name: 'Customer Detail Template',
+  //   description: 'Detailed view of a single customer with full contact and address information',
+  //   mimeType: 'text/html',
+  //   filePath: 'customers/customer-detail.html',
+  // },
+  // {
+  //   uri: 'ui://shared/styles.css',
+  //   name: 'Shared Styles',
+  //   description: 'Common CSS styles for all templates',
+  //   mimeType: 'text/css',
+  //   filePath: 'shared/styles.css',
+  // },
 ];
 
 /**
