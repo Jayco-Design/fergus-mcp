@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Details</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="container">
+    <div id="customer-detail"></div>
+  </div>
+
+  <script>
+    // Get structured data from ChatGPT
+    const customer = window.structuredContent?.customer || {};
+
+    function render() {
+      const container = document.getElementById('customer-detail');
+
+      if (!customer || !customer.id) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <p>Customer not found</p>
+          </div>
+        `;
+        return;
+      }
+
+      const html = `
+        <div class="card">
+          <div class="card-header">${escapeHtml(customer.name || customer.customerFullName || 'Unnamed Customer')}</div>
+          <div class="card-body">
+            <div class="mb-2">
+              <span class="text-muted text-small">Customer ID:</span>
+              <span class="text-bold">${customer.id}</span>
+            </div>
+
+            ${customer.mainContact || customer.email || customer.phone ? `
+              <div class="mb-3">
+                <h3 class="text-bold mb-1">Contact Information</h3>
+                ${customer.mainContact?.name ? `
+                  <div class="mb-1">
+                    <span class="text-muted text-small">Name:</span>
+                    ${escapeHtml(customer.mainContact.name)}
+                  </div>
+                ` : ''}
+                ${customer.mainContact?.email || customer.email ? `
+                  <div class="mb-1">
+                    <span class="text-muted text-small">Email:</span>
+                    <a href="mailto:${escapeHtml(customer.mainContact?.email || customer.email)}">
+                      ${escapeHtml(customer.mainContact?.email || customer.email)}
+                    </a>
+                  </div>
+                ` : ''}
+                ${customer.mainContact?.phone || customer.phone ? `
+                  <div class="mb-1">
+                    <span class="text-muted text-small">Phone:</span>
+                    ${escapeHtml(customer.mainContact?.phone || customer.phone)}
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+
+            ${customer.physicalAddress || customer.address ? `
+              <div class="mb-3">
+                <h3 class="text-bold mb-1">Physical Address</h3>
+                ${renderAddress(customer.physicalAddress || customer.address)}
+              </div>
+            ` : ''}
+
+            ${customer.postalAddress ? `
+              <div class="mb-3">
+                <h3 class="text-bold mb-1">Postal Address</h3>
+                ${renderAddress(customer.postalAddress)}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function renderAddress(address) {
+      if (!address) return '<span class="text-muted">No address provided</span>';
+
+      return `
+        <div>
+          ${address.line1 ? `<div>${escapeHtml(address.line1)}</div>` : ''}
+          ${address.line2 ? `<div>${escapeHtml(address.line2)}</div>` : ''}
+          ${address.city || address.postalCode ? `
+            <div>${escapeHtml([address.city, address.postalCode].filter(Boolean).join(', '))}</div>
+          ` : ''}
+          ${address.country ? `<div>${escapeHtml(address.country)}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Render on load
+    render();
+  </script>
+</body>
+</html>

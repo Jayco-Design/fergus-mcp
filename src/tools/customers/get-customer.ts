@@ -9,7 +9,8 @@ export const getCustomerToolDefinition = {
   name: 'get-customer',
   description: 'Get details of a specific customer by ID',
   annotations: {
-    readOnlyHint: true
+    readOnlyHint: true,
+    'openai/outputTemplate': 'ui://customers/customer-detail.html'
   },
   inputSchema: {
     type: 'object',
@@ -33,14 +34,30 @@ export async function handleGetCustomer(
     throw new Error('customerId is required');
   }
 
-  const customer = await fergusClient.get(`/customers/${customerId}`);
+  const customer = await fergusClient.get(`/customers/${customerId}`) as any;
+
+  // Create structured customer data
+  const structuredCustomer = {
+    id: customer.id || customer.customerId,
+    name: customer.customerFullName || customer.name,
+    email: customer.mainContact?.email || customer.email,
+    phone: customer.mainContact?.phone || customer.phone,
+    mainContact: customer.mainContact,
+    physicalAddress: customer.physicalAddress,
+    postalAddress: customer.postalAddress,
+    customerFullName: customer.customerFullName,
+  };
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(customer, null, 2),
+        text: JSON.stringify(structuredCustomer, null, 2),
       },
     ],
+    // Structured content for ChatGPT Apps template
+    structuredContent: {
+      customer: structuredCustomer,
+    },
   };
 }

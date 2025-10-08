@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customers</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="container">
+    <div id="customers-container"></div>
+    <div id="pagination-container"></div>
+  </div>
+
+  <script>
+    // Get structured data from ChatGPT
+    const data = window.structuredContent || {};
+    const customers = data.customers || [];
+    const pagination = data.pagination || {};
+
+    function render() {
+      const container = document.getElementById('customers-container');
+
+      if (!customers || customers.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <p>No customers found</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Render as a table
+      const html = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Contact</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${customers.map(customer => `
+              <tr>
+                <td>
+                  <div class="text-bold">${escapeHtml(customer.name || 'Unnamed Customer')}</div>
+                  <div class="text-small text-muted">ID: ${customer.id}</div>
+                </td>
+                <td>
+                  ${customer.email ? `
+                    <div>${escapeHtml(customer.email)}</div>
+                  ` : ''}
+                  ${customer.phone ? `
+                    <div class="text-small text-muted">${escapeHtml(customer.phone)}</div>
+                  ` : ''}
+                  ${!customer.email && !customer.phone ? '<span class="text-muted">No contact</span>' : ''}
+                </td>
+                <td>
+                  ${customer.address ? `
+                    <div>${escapeHtml(customer.address.city || '')}</div>
+                    <div class="text-small text-muted">${escapeHtml(customer.address.postalCode || '')}</div>
+                  ` : '<span class="text-muted">No address</span>'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      container.innerHTML = html;
+
+      // Render pagination info
+      if (pagination.count > 0) {
+        const paginationContainer = document.getElementById('pagination-container');
+        paginationContainer.innerHTML = `
+          <div class="pagination-info">
+            Showing ${pagination.count} of ${pagination.total || pagination.count} customer(s)
+          </div>
+        `;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Render on load
+    render();
+  </script>
+</body>
+</html>
