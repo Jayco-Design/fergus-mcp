@@ -1,9 +1,53 @@
 /**
- * List Time Entries Tool
- * Lists time entries with optional filtering by user, job, and date range
+ * Time Entry Tools
+ * All time entry-related operations (get, list)
  */
 
 import { FergusClient } from '../fergus-client.js';
+
+// ===== GET TIME ENTRY =====
+
+export const getTimeEntryToolDefinition = {
+  name: 'get-time-entry',
+  description: 'Get details of a specific time entry by ID',
+  annotations: {
+    readOnlyHint: true
+  },
+  inputSchema: {
+    type: 'object',
+    properties: {
+      timeEntryId: {
+        type: 'string',
+        description: 'The ID of the time entry to retrieve',
+      },
+    },
+    required: ['timeEntryId'],
+  },
+};
+
+export async function handleGetTimeEntry(
+  fergusClient: FergusClient,
+  args: { timeEntryId: string }
+) {
+  const { timeEntryId } = args;
+
+  if (!timeEntryId) {
+    throw new Error('timeEntryId is required');
+  }
+
+  const timeEntry = await fergusClient.get(`/timeEntries/${timeEntryId}`);
+
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(timeEntry, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== LIST TIME ENTRIES =====
 
 export const listTimeEntriesToolDefinition = {
   name: 'list-time-entries',

@@ -12,31 +12,72 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { FergusClient } from './fergus-client.js';
 
-// Tool handlers
-import { getJobToolDefinition, handleGetJob } from './tools/get-job.js';
-import { listJobsToolDefinition, handleListJobs } from './tools/list-jobs.js';
-import { getTimeEntryToolDefinition, handleGetTimeEntry } from './tools/get-time-entry.js';
-import { listTimeEntriesToolDefinition, handleListTimeEntries } from './tools/list-time-entries.js';
-import { getQuoteToolDefinition, handleGetQuote } from './tools/get-quote.js';
-import { getQuoteDetailToolDefinition, handleGetQuoteDetail } from './tools/get-quote-detail.js';
-import { listQuotesToolDefinition, handleListQuotes } from './tools/list-quotes.js';
-import { getCustomerToolDefinition, handleGetCustomer } from './tools/customers/get-customer.js';
-import { listCustomersToolDefinition, handleListCustomers } from './tools/customers/list-customers.js';
-import { getSiteToolDefinition, handleGetSite } from './tools/get-site.js';
-import { listSitesToolDefinition, handleListSites } from './tools/list-sites.js';
-import { getUserToolDefinition, handleGetUser } from './tools/get-user.js';
-import { listUsersToolDefinition, handleListUsers } from './tools/list-users.js';
-import { createJobToolDefinition, handleCreateJob } from './tools/create-job.js';
-import { updateJobToolDefinition, handleUpdateJob } from './tools/update-job.js';
-import { finalizeJobToolDefinition, handleFinalizeJob } from './tools/finalize-job.js';
-import { createQuoteToolDefinition, handleCreateQuote } from './tools/create-quote.js';
-import { updateQuoteToolDefinition, handleUpdateQuote } from './tools/update-quote.js';
-import { updateQuoteVersionToolDefinition, handleUpdateQuoteVersion } from './tools/update-quote-version.js';
-import { createCustomerToolDefinition, handleCreateCustomer } from './tools/customers/create-customer.js';
-import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/customers/update-customer.js';
-import { createSiteToolDefinition, handleCreateSite } from './tools/create-site.js';
-import { updateSiteToolDefinition, handleUpdateSite } from './tools/update-site.js';
-import { updateUserToolDefinition, handleUpdateUser } from './tools/update-user.js';
+// Tool handlers - consolidated imports
+import {
+  getCustomerToolDefinition,
+  listCustomersToolDefinition,
+  createCustomerToolDefinition,
+  updateCustomerToolDefinition,
+  handleGetCustomer,
+  handleListCustomers,
+  handleCreateCustomer,
+  handleUpdateCustomer,
+} from './tools/customers.js';
+
+import {
+  getSiteToolDefinition,
+  listSitesToolDefinition,
+  createSiteToolDefinition,
+  updateSiteToolDefinition,
+  handleGetSite,
+  handleListSites,
+  handleCreateSite,
+  handleUpdateSite,
+} from './tools/sites.js';
+
+import {
+  getJobToolDefinition,
+  listJobsToolDefinition,
+  createJobToolDefinition,
+  updateJobToolDefinition,
+  finalizeJobToolDefinition,
+  handleGetJob,
+  handleListJobs,
+  handleCreateJob,
+  handleUpdateJob,
+  handleFinalizeJob,
+} from './tools/jobs.js';
+
+import {
+  getQuoteToolDefinition,
+  getQuoteDetailToolDefinition,
+  listQuotesToolDefinition,
+  createQuoteToolDefinition,
+  updateQuoteToolDefinition,
+  updateQuoteVersionToolDefinition,
+  handleGetQuote,
+  handleGetQuoteDetail,
+  handleListQuotes,
+  handleCreateQuote,
+  handleUpdateQuote,
+  handleUpdateQuoteVersion,
+} from './tools/quotes.js';
+
+import {
+  getUserToolDefinition,
+  listUsersToolDefinition,
+  updateUserToolDefinition,
+  handleGetUser,
+  handleListUsers,
+  handleUpdateUser,
+} from './tools/users.js';
+
+import {
+  getTimeEntryToolDefinition,
+  listTimeEntriesToolDefinition,
+  handleGetTimeEntry,
+  handleListTimeEntries,
+} from './tools/time-entries.js';
 
 // Prompt handlers
 import { jobCreationAssistantPromptDefinition, getJobCreationAssistantPrompt } from './prompts/job-creation-assistant.js';
