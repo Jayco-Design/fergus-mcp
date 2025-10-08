@@ -43,6 +43,9 @@ import { jobCreationAssistantPromptDefinition, getJobCreationAssistantPrompt } f
 import { quoteGeneratorPromptDefinition, getQuoteGeneratorPrompt } from './prompts/quote-generator.js';
 import { weeklyReportPromptDefinition, getWeeklyReportPrompt } from './prompts/weekly-report.js';
 
+// Template resources
+import { registerTemplateResources } from './templates/index.js';
+
 /**
  * Create and configure an MCP server with all tools and prompts
  * @param fergusClient - Configured FergusClient instance
@@ -59,6 +62,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
       capabilities: {
         tools: {},
         prompts: {},
+        resources: {}, // Enable resources for ChatGPT App templates
       },
     }
   );
@@ -329,6 +333,9 @@ export function createMcpServer(fergusClient: FergusClient): Server {
       };
     }
   });
+
+  // Register template resources for ChatGPT Apps
+  registerTemplateResources(server);
 
   return server;
 }
