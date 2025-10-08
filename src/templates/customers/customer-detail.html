@@ -13,7 +13,7 @@
 
   <script>
     // Get structured data from ChatGPT
-    const customer = window.structuredContent?.customer || {};
+    const customer = window.openai?.toolOutput?.structuredContent?.customer || {};
 
     function render() {
       const container = document.getElementById('customer-detail');
