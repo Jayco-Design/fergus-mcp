@@ -204,15 +204,20 @@
 
     // Listen for data from ChatGPT Apps SDK
     window.addEventListener('openai:set_globals', (event) => {
-      console.log('[Fergus MCP] openai:set_globals event:', event.detail);
-      const customer = event.detail?.toolOutput?.structuredContent?.customer;
+      console.log('[Fergus MCP] openai:set_globals event received');
+
+      // Access customer directly from toolOutput (structuredContent is flattened)
+      const toolOutput = event.detail?.globals?.toolOutput;
+      const customer = toolOutput?.customer;
+
+      console.log('[Fergus MCP] Customer data:', customer);
       if (customer) {
         render(customer);
       }
     });
 
     // Also render immediately if data is already available (for compatibility)
-    const initialCustomer = window.openai?.toolOutput?.structuredContent?.customer;
+    const initialCustomer = window.openai?.toolOutput?.customer;
     if (initialCustomer) {
       console.log('[Fergus MCP] Initial customer data available:', initialCustomer);
       render(initialCustomer);
