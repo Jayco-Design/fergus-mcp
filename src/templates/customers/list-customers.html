@@ -18,6 +18,13 @@
     const customers = data.customers || [];
     const pagination = data.pagination || {};
 
+    function getInitials(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(' ');
+      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+
     function render() {
       const container = document.getElementById('customers-container');
 
@@ -25,48 +32,76 @@
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">👥</div>
-            <p>No customers found</p>
+            <div class="empty-state-title">No customers found</div>
+            <div class="empty-state-message">Try adjusting your search criteria</div>
           </div>
         `;
         return;
       }
 
-      // Render as a table
+      // Render as a grid of cards
       const html = `
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Contact</th>
-              <th>Location</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${customers.map(customer => `
-              <tr>
-                <td>
-                  <div class="text-bold">${escapeHtml(customer.name || 'Unnamed Customer')}</div>
-                  <div class="text-small text-muted">ID: ${customer.id}</div>
-                </td>
-                <td>
+        <div class="grid">
+          ${customers.map(customer => {
+            const initials = getInitials(customer.name);
+            const hasContact = customer.email || customer.phone;
+            const hasAddress = customer.address?.city || customer.address?.postalCode;
+
+            return `
+              <div class="customer-card">
+                <div class="customer-card-header">
+                  <div class="customer-card-avatar" aria-label="${escapeHtml(customer.name || 'Unknown')} avatar">
+                    ${escapeHtml(initials)}
+                  </div>
+                  <div style="flex: 1; min-width: 0;">
+                    <div class="customer-card-title">${escapeHtml(customer.name || 'Unnamed Customer')}</div>
+                    <div class="customer-card-subtitle">ID: ${escapeHtml(customer.id?.toString() || 'N/A')}</div>
+                  </div>
+                </div>
+
+                <div class="customer-card-body">
                   ${customer.email ? `
-                    <div>${escapeHtml(customer.email)}</div>
+                    <div class="customer-card-row">
+                      <svg class="customer-card-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M2 4l6 4 6-4M2 4v8h12V4M2 4h12" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <a href="mailto:${escapeHtml(customer.email)}" class="text-sm">
+                        ${escapeHtml(customer.email)}
+                      </a>
+                    </div>
                   ` : ''}
+
                   ${customer.phone ? `
-                    <div class="text-small text-muted">${escapeHtml(customer.phone)}</div>
+                    <div class="customer-card-row">
+                      <svg class="customer-card-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M3 2h3l1 4-2 2c1 2 3 4 5 5l2-2 4 1v3a1 1 0 01-1 1C7 16 0 9 0 3a1 1 0 011-1z" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <span class="text-sm">${escapeHtml(customer.phone)}</span>
+                    </div>
                   ` : ''}
-                  ${!customer.email && !customer.phone ? '<span class="text-muted">No contact</span>' : ''}
-                </td>
-                <td>
-                  ${customer.address ? `
-                    <div>${escapeHtml(customer.address.city || '')}</div>
-                    <div class="text-small text-muted">${escapeHtml(customer.address.postalCode || '')}</div>
-                  ` : '<span class="text-muted">No address</span>'}
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+
+                  ${hasAddress ? `
+                    <div class="customer-card-row">
+                      <svg class="customer-card-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M8 14s6-4 6-8a6 6 0 00-12 0c0 4 6 8 6 8z" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="8" cy="6" r="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <span class="text-sm">
+                        ${escapeHtml([customer.address?.city, customer.address?.postalCode].filter(Boolean).join(', '))}
+                      </span>
+                    </div>
+                  ` : ''}
+
+                  ${!hasContact && !hasAddress ? `
+                    <div class="customer-card-row text-tertiary">
+                      <span class="text-sm">No contact information</span>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       `;
 
       container.innerHTML = html;
@@ -74,17 +109,23 @@
       // Render pagination info
       if (pagination.count > 0) {
         const paginationContainer = document.getElementById('pagination-container');
+        const totalText = pagination.total && pagination.total > pagination.count
+          ? ` of ${pagination.total}`
+          : '';
         paginationContainer.innerHTML = `
-          <div class="pagination-info">
-            Showing ${pagination.count} of ${pagination.total || pagination.count} customer(s)
+          <div class="pagination">
+            <div class="pagination-info">
+              Showing ${pagination.count}${totalText} customer${pagination.count !== 1 ? 's' : ''}
+            </div>
           </div>
         `;
       }
     }
 
     function escapeHtml(text) {
+      if (!text) return '';
       const div = document.createElement('div');
-      div.textContent = text;
+      div.textContent = String(text);
       return div.innerHTML;
     }
 
