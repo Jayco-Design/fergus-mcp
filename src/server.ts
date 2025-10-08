@@ -20,8 +20,8 @@ import { listTimeEntriesToolDefinition, handleListTimeEntries } from './tools/li
 import { getQuoteToolDefinition, handleGetQuote } from './tools/get-quote.js';
 import { getQuoteDetailToolDefinition, handleGetQuoteDetail } from './tools/get-quote-detail.js';
 import { listQuotesToolDefinition, handleListQuotes } from './tools/list-quotes.js';
-import { getCustomerToolDefinition, handleGetCustomer } from './tools/get-customer.js';
-import { listCustomersToolDefinition, handleListCustomers } from './tools/list-customers.js';
+import { getCustomerToolDefinition, handleGetCustomer } from './tools/customers/get-customer.js';
+import { listCustomersToolDefinition, handleListCustomers } from './tools/customers/list-customers.js';
 import { getSiteToolDefinition, handleGetSite } from './tools/get-site.js';
 import { listSitesToolDefinition, handleListSites } from './tools/list-sites.js';
 import { getUserToolDefinition, handleGetUser } from './tools/get-user.js';
@@ -32,8 +32,8 @@ import { finalizeJobToolDefinition, handleFinalizeJob } from './tools/finalize-j
 import { createQuoteToolDefinition, handleCreateQuote } from './tools/create-quote.js';
 import { updateQuoteToolDefinition, handleUpdateQuote } from './tools/update-quote.js';
 import { updateQuoteVersionToolDefinition, handleUpdateQuoteVersion } from './tools/update-quote-version.js';
-import { createCustomerToolDefinition, handleCreateCustomer } from './tools/create-customer.js';
-import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/update-customer.js';
+import { createCustomerToolDefinition, handleCreateCustomer } from './tools/customers/create-customer.js';
+import { updateCustomerToolDefinition, handleUpdateCustomer } from './tools/customers/update-customer.js';
 import { createSiteToolDefinition, handleCreateSite } from './tools/create-site.js';
 import { updateSiteToolDefinition, handleUpdateSite } from './tools/update-site.js';
 import { updateUserToolDefinition, handleUpdateUser } from './tools/update-user.js';

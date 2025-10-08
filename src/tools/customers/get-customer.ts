@@ -3,7 +3,7 @@
  * Retrieves a specific customer by ID
  */
 
-import { FergusClient } from '../fergus-client.js';
+import { FergusClient } from '../../fergus-client.js';
 
 export const getCustomerToolDefinition = {
   name: 'get-customer',

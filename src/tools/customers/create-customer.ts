@@ -3,7 +3,7 @@
  * Creates a new customer
  */
 
-import { FergusClient } from '../fergus-client.js';
+import { FergusClient } from '../../fergus-client.js';
 
 export const createCustomerToolDefinition = {
   name: 'create-customer',

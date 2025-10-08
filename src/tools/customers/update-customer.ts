@@ -3,7 +3,7 @@
  * Updates an existing customer
  */
 
-import { FergusClient } from '../fergus-client.js';
+import { FergusClient} from '../../fergus-client.js';
 
 export const updateCustomerToolDefinition = {
   name: 'update-customer',

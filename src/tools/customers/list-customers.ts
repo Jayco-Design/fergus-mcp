@@ -3,7 +3,7 @@
  * Lists customers with optional search and pagination
  */
 
-import { FergusClient } from '../fergus-client.js';
+import { FergusClient } from '../../fergus-client.js';
 
 export const listCustomersToolDefinition = {
   name: 'list-customers',
@@ -70,14 +70,45 @@ export async function handleListCustomers(
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
 
   const endpoint = `/customers?${params.toString()}`;
-  const customers = await fergusClient.get(endpoint);
+  const response = await fergusClient.get(endpoint) as any;
+
+  // Extract customers array from response
+  const customers = Array.isArray(response) ? response : (response.data || response.customers || []);
+  const totalCount = response.total || response.totalCount || customers.length;
+  const nextCursor = response.nextCursor || response.pageCursor || null;
+
+  // Create a concise text summary
+  const summary = `Found ${customers.length} customer(s)${totalCount > customers.length ? ` of ${totalCount} total` : ''}`;
+
+  // Structure the data for better ChatGPT consumption
+  const structuredCustomers = customers.map((customer: any) => ({
+    id: customer.id || customer.customerId,
+    name: customer.customerFullName || customer.name,
+    email: customer.mainContact?.email || customer.email,
+    phone: customer.mainContact?.phone || customer.phone,
+    address: customer.physicalAddress ? {
+      line1: customer.physicalAddress.line1,
+      city: customer.physicalAddress.city,
+      postalCode: customer.physicalAddress.postalCode,
+      country: customer.physicalAddress.country,
+    } : null,
+  }));
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(customers, null, 2),
+        text: `${summary}\n\n${JSON.stringify(structuredCustomers, null, 2)}`,
       },
     ],
+    // Structured content for ChatGPT Apps to consume
+    structuredContent: {
+      customers: structuredCustomers,
+      pagination: {
+        count: customers.length,
+        total: totalCount,
+        nextCursor,
+      },
+    },
   };
 }
