@@ -513,6 +513,170 @@ fergus-mcp/
 
 ---
 
+## Phase 6: Modern Build System & Component Architecture 🎯 FUTURE
+
+**Goal**: Migrate from inline HTML/CSS/JS templates to a modern bundled component architecture like OpenAI's Apps SDK examples
+
+**Reference**: https://github.com/nzben/openai-apps-sdk-examples (OpenAI's official examples)
+
+### Current Architecture (Phase 1-5)
+- ✅ Simple inline HTML templates with embedded CSS and JS
+- ✅ Templates served as static HTML files via MCP resources
+- ✅ Manual CSS inlining from `shared/styles.css`
+- ✅ No build step for templates (just copy to dist)
+- ⚠️ Limited interactivity (vanilla JS only)
+- ⚠️ No React or modern framework support
+- ⚠️ CSS duplication across templates
+
+### OpenAI's Architecture (Vite + React + Bundling)
+
+**Key Components**:
+
+1. **Vite Build System**
+   - Multi-entry point configuration (`vite.config.mts`)
+   - Custom build orchestrator (`build-all.mts`)
+   - Automatic entry discovery via `src/**/index.{tsx,jsx}` glob
+   - Separate dev server (port 4444) for component development
+   - Production builds with hashing and versioning
+
+2. **Bundling Strategy**
+   - Each widget is a separate entry point (e.g., `src/pizzaz/index.jsx`)
+   - Build outputs self-contained HTML files with inlined CSS and JS
+   - Versioned/hashed filenames (e.g., `pizzaz-a3f2.html`)
+   - CSS collected from global + per-entry sources
+   - All assets bundled into single HTML file per widget
+
+3. **React + TypeScript**
+   - React for interactive components
+   - TypeScript/JSX for type safety
+   - Shared hooks: `useOpenAiGlobal`, `useMaxHeight`, `useDisplayMode`, `useWidgetState`
+   - Routing via `react-router-dom` for complex widgets
+   - External libraries: Mapbox GL, Framer Motion, Lucide icons
+
+4. **Component Structure**
+   ```
+   src/
+   ├── pizzaz/              # Widget entry point
+   │   ├── index.jsx       # Main component
+   │   ├── Inspector.jsx   # Sub-component
+   │   ├── Sidebar.jsx     # Sub-component
+   │   ├── map.css         # Widget-specific CSS
+   │   └── markers.json    # Data
+   ├── use-openai-global.ts  # Shared hook
+   ├── use-max-height.ts     # Shared hook
+   └── index.css            # Global CSS (Tailwind)
+   ```
+
+5. **Build Output**
+   ```
+   assets/
+   ├── pizzaz-a3f2.html    # Self-contained widget
+   ├── pizzaz-a3f2.js      # (intermediate, inlined)
+   ├── pizzaz-a3f2.css     # (intermediate, inlined)
+   └── todo-b5e8.html      # Another widget
+   ```
+
+6. **MCP Server Integration**
+   - Server references versioned HTML files: `ui://pizzaz-a3f2.html`
+   - MCP resources endpoint serves built HTML from `assets/`
+   - No separate CSS/JS files served (all inlined in HTML)
+   - Build hash based on package.json version
+
+### Migration Plan (Future Work)
+
+**Phase 6.1: Setup Build Infrastructure**
+- [ ] Install Vite and build dependencies:
+  - `vite`, `@vitejs/plugin-react`, `fast-glob`
+  - `react`, `react-dom` (if we want React)
+  - `@tailwindcss/vite` (optional, for Tailwind)
+- [ ] Create `vite.config.mts` based on OpenAI's multi-entry setup
+- [ ] Create `build-all.mts` orchestrator script
+- [ ] Configure Vite to auto-discover components in `src/templates/*/index.tsx`
+- [ ] Update `package.json` scripts:
+  - `"dev:templates": "vite --config vite.config.mts"`
+  - `"build:templates": "tsx build-all.mts"`
+  - `"build": "tsc && pnpm run build:templates"`
+
+**Phase 6.2: Convert Customers Templates to React**
+- [ ] Create `src/templates/customers/index.tsx` (React entry point)
+- [ ] Convert `list-customers.html` logic to React component
+- [ ] Convert `customer-detail.html` to React component
+- [ ] Extract shared hooks:
+  - `useToolOutput()` - access `window.openai.toolOutput`
+  - `useOpenAiGlobal()` - access full `window.openai` object
+- [ ] Move CSS to `src/templates/customers/styles.css`
+- [ ] Test with Vite dev server (http://localhost:4444/customers.html)
+
+**Phase 6.3: Build and Serve Bundled Templates**
+- [ ] Run build: outputs `assets/customers-{hash}.html`
+- [ ] Update `src/templates/index.ts` to serve from `assets/` directory
+- [ ] Update tool `_meta` to reference hashed filenames:
+  ```typescript
+  _meta: {
+    'openai/outputTemplate': 'ui://customers-a3f2.html'
+  }
+  ```
+- [ ] Implement version detection (use package.json version for hash)
+- [ ] Test end-to-end with ChatGPT
+
+**Phase 6.4: Migrate Remaining Templates**
+- [ ] Convert Sites templates to React components
+- [ ] Convert Jobs templates to React components
+- [ ] Convert Quotes templates to React components
+- [ ] Convert Users templates to React components
+- [ ] Extract shared components to `src/templates/shared/`
+
+**Phase 6.5: Add Advanced Features**
+- [ ] Add routing for detail views (react-router-dom)
+- [ ] Add interactive filters and search
+- [ ] Add animations (framer-motion)
+- [ ] Add charts/graphs for analytics views
+- [ ] Add map visualization for sites (Mapbox GL)
+- [ ] Implement widget state persistence (`useWidgetState`)
+
+### Benefits of Migration
+
+**Developer Experience**:
+- ✅ Modern React development with hot reload
+- ✅ TypeScript type safety
+- ✅ Component reusability
+- ✅ Better code organization
+- ✅ NPM ecosystem access (charts, maps, animations)
+
+**User Experience**:
+- ✅ Richer interactivity
+- ✅ Better performance (optimized bundles)
+- ✅ Smoother animations
+- ✅ More sophisticated UI components
+
+**Maintenance**:
+- ✅ Smaller bundle sizes (tree shaking)
+- ✅ Versioned assets (cache busting)
+- ✅ Shared utilities across widgets
+- ✅ Easier to add new widgets
+
+### Trade-offs
+
+**Complexity**:
+- ❌ More complex build pipeline
+- ❌ Additional dependencies (React, Vite)
+- ❌ Longer build times
+- ❌ Requires Node.js build step
+
+**Bundle Size**:
+- ❌ Larger initial downloads (React runtime)
+- ✅ But offset by better code splitting and reuse
+
+### Decision: Defer to Phase 6
+
+**Recommendation**: Keep current simple HTML approach for Phase 1-5, migrate to bundled React components in Phase 6 when:
+1. Customer templates are proven and stable
+2. We have 3+ entity types using templates
+3. We need interactive features beyond vanilla JS
+4. Team is comfortable with React/Vite tooling
+
+---
+
 ## Design Decisions & Discussion Points
 
 ### 1. Template Hosting Strategy
