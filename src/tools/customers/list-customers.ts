@@ -130,15 +130,13 @@ export async function handleListCustomers(
     } : null,
   }));
 
-  // When using outputTemplate, return minimal text content
-  // The visual template will show the data
-  const summary = `Found ${customers.length} customer(s)${totalCount > customers.length ? ` of ${totalCount} total` : ''}`;
-
+  // When using outputTemplate, return empty text content
+  // The visual template will show all the data
   return {
     content: [
       {
         type: 'text' as const,
-        text: summary, // Just the summary, not the full JSON
+        text: '', // Empty - widget shows everything
       },
     ],
     // Structured content for ChatGPT Apps to consume

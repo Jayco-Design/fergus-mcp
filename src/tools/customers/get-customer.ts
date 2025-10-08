@@ -102,7 +102,7 @@ export async function handleGetCustomer(
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(structuredCustomer, null, 2),
+        text: '', // Empty - widget shows everything
       },
     ],
     // Structured content for ChatGPT Apps template
