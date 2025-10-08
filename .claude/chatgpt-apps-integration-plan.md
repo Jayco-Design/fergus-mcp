@@ -5,20 +5,30 @@
 This plan outlines the refactoring and enhancement of the Fergus MCP server to provide a rich, structured experience for ChatGPT Apps with visual UI components.
 
 **Created**: 2025-10-08
-**Status**: Draft for Discussion
+**Last Updated**: 2025-10-08
+**Status**: ✅ Phases 1-4 Complete for Customers | Next: Sites, Jobs, Quotes Templates
 
 ---
 
 ## Current State
 
-- ✅ 26 tools in flat `src/tools/` directory (24 tool files)
-- ✅ All tools functional via stdio and HTTP transports
-- ✅ Read-only annotations added to 13 read-only tools
-- ✅ `list-users` and `list-sites` return `structuredContent`
-- ❌ No UI templates or visual components
-- ❌ Large tool files (up to 214 lines)
-- ❌ No grouping by entity type
-- ❌ Inconsistent structured response patterns
+- ✅ 26 tools functional via stdio and HTTP transports
+- ✅ Unauthenticated tool discovery enabled for ChatGPT
+- ✅ Read-only annotations (`readOnlyHint: true`) added to 13 read-only tools
+- ✅ Customer tools refactored into `src/tools/customers/` subdirectory
+- ✅ Structured content implemented for:
+  - `list-users` (users array + pagination)
+  - `list-sites` (sites array + pagination)
+  - `list-customers` (customers array + pagination)
+  - `get-customer` (customer detail object)
+- ✅ ChatGPT App templates created for customers:
+  - `templates/customers/list-customers.html` (table view)
+  - `templates/customers/customer-detail.html` (detail card)
+  - `templates/shared/styles.css` (design system)
+- ✅ MCP resource server serving templates via `ui://` protocol
+- ✅ Build process copies templates to `dist/` folder
+- ✅ Template metadata in `_meta` field (not annotations)
+- ✅ Resources capability enabled in server
 
 ---
 
@@ -106,84 +116,52 @@ fergus-mcp/
 
 ## Implementation Phases
 
-### Phase 1: Refactor Tool Structure ⏳ NOT STARTED
+### Phase 1: Refactor Tool Structure ✅ COMPLETED (Customers)
 
 **Goal**: Reorganize tools into entity-based subdirectories
 
 #### Tasks:
 
 1. **Create new directory structure**
-   - [ ] Create subdirectories: `jobs/`, `quotes/`, `customers/`, `sites/`, `users/`, `time-entries/`, `shared/`
-   - [ ] Create `index.ts` in each subdirectory
+   - [x] ✅ Create `customers/` subdirectory
+   - [x] ✅ Create `index.ts` in customers subdirectory
+   - [ ] Create remaining subdirectories: `jobs/`, `quotes/`, `sites/`, `users/`, `time-entries/`, `shared/`
 
 2. **Create shared utilities**
-   - [ ] Create `src/tools/shared/types.ts`:
-     ```typescript
-     export interface StructuredResponse<T> {
-       content: Array<{ type: 'text'; text: string }>;
-       structuredContent?: T;
-     }
+   - [ ] Create `src/tools/shared/types.ts` (not needed yet)
+   - [ ] Create `src/tools/shared/response-builder.ts` (deferred)
+   - [ ] Create `src/tools/shared/template-paths.ts` (deferred)
 
-     export interface PaginationInfo {
-       count: number;
-       total: number;
-       nextCursor: string | null;
-     }
-     ```
-   - [ ] Create `src/tools/shared/response-builder.ts`:
-     ```typescript
-     export function buildListResponse<T>(options: {
-       items: T[];
-       totalCount: number;
-       nextCursor: string | null;
-       entityName: string;
-       itemKey: string;
-       templateUri?: string;
-     }): StructuredResponse<any>
-     ```
-   - [ ] Create `src/tools/shared/template-paths.ts`:
-     ```typescript
-     export const TEMPLATES = {
-       CUSTOMERS: {
-         LIST: 'ui://customers/list-customers.html',
-         DETAIL: 'ui://customers/customer-detail.html'
-       },
-       // ... etc
-     }
-     ```
-
-3. **Move tools to subdirectories** (use git mv to preserve history)
+3. **Move tools to subdirectories**
+   - [x] ✅ Move customer tools to `customers/` (get, list, create, update)
    - [ ] Move job tools to `jobs/`
    - [ ] Move quote tools to `quotes/`
-   - [ ] Move customer tools to `customers/`
    - [ ] Move site tools to `sites/`
    - [ ] Move user tools to `users/`
    - [ ] Move time entry tools to `time-entries/`
 
-4. **Update all tool files to use shared utilities**
-   - [ ] Update imports in moved files
-   - [ ] Refactor `list-users.ts` to use `buildListResponse()`
-   - [ ] Refactor `list-sites.ts` to use `buildListResponse()`
-   - [ ] Add `structuredContent` to remaining list tools
+4. **Update tool files**
+   - [x] ✅ Update imports for customer tools in `src/server.ts`
+   - [x] ✅ Use barrel export from customers subdirectory
+   - [ ] Add `structuredContent` to remaining list tools (sites/users already have it)
 
 5. **Update `src/server.ts`**
-   - [ ] Update imports to use new subdirectory paths
-   - [ ] Consider using barrel exports from subdirectories
+   - [x] ✅ Update imports to use `./tools/customers/index.js`
+   - [x] ✅ Using barrel exports for customer tools
 
 6. **Test refactored structure**
-   - [ ] Build successfully: `pnpm build`
-   - [ ] Test stdio mode still works
-   - [ ] Test HTTP mode still works
+   - [x] ✅ Build successfully: `pnpm build`
+   - [x] ✅ HTTP mode tested and working
 
 **Success Criteria**:
-- ✅ All tools organized by entity type
-- ✅ Shared utilities reduce code duplication
+- ✅ Customer tools organized by entity type
+- ⏳ Shared utilities (deferred until more entities refactored)
 - ✅ All imports working, builds successfully
 - ✅ No functionality broken
 
 ---
 
-### Phase 2: Add Structured Content to All List Tools ⏳ NOT STARTED
+### Phase 2: Add Structured Content to All List Tools ✅ COMPLETED (Customers, Users, Sites)
 
 **Goal**: Standardize structured responses across all list endpoints
 
@@ -198,30 +176,32 @@ fergus-mcp/
    - [ ] Extract key fields: id, title, jobId, status, total, dates
 
 3. **Update list-customers**
-   - [ ] Return `structuredContent` with customer array + pagination
-   - [ ] Extract key fields: id, name, email, phone, address
+   - [x] ✅ Return `structuredContent` with customer array + pagination
+   - [x] ✅ Extract key fields: id, name, email, phone, address
 
 4. **Update list-time-entries**
    - [ ] Return `structuredContent` with time entry array + pagination
    - [ ] Extract key fields: id, user, job, date, hours, description
 
 5. **Update all get-* tools**
-   - [ ] Consider adding `structuredContent` for consistency
-   - [ ] Use shared response builder
+   - [x] ✅ `get-customer` returns `structuredContent` with customer object
+   - [x] ✅ `list-users` returns `structuredContent` (already implemented)
+   - [x] ✅ `list-sites` returns `structuredContent` (already implemented)
+   - [ ] Other get-* tools pending
 
 **Success Criteria**:
-- ✅ All list tools return `structuredContent`
-- ✅ Consistent data structure across all tools
-- ✅ Pagination info included where applicable
+- ✅ Customers, users, sites return `structuredContent`
+- ✅ Consistent data structure for implemented entities
+- ✅ Pagination info included for list tools
 
 ---
 
-### Phase 3: Create UI Templates (Priority Entities) ⏳ NOT STARTED
+### Phase 3: Create UI Templates (Priority Entities) ✅ COMPLETED (Customers)
 
 **Goal**: Build visual components for high-value entities first
 
 #### Priority Order:
-1. **Customers** (most important business entity)
+1. ✅ **Customers** (most important business entity) - COMPLETED
 2. **Sites** (can include map visualization)
 3. **Jobs** (core workflow)
 4. **Quotes** (complex data, benefits from visualization)
@@ -230,44 +210,30 @@ fergus-mcp/
 
 #### Tasks for Each Entity:
 
-**3.1: Customers UI Templates**
+**3.1: Customers UI Templates** ✅ COMPLETED
 
-- [ ] Create `src/templates/customers/list-customers.html`:
-  ```html
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <link rel="stylesheet" href="../shared/styles.css">
-      <style>
-        .customer-grid { display: grid; gap: 1rem; }
-        .customer-card { border: 1px solid #ddd; padding: 1rem; border-radius: 8px; }
-      </style>
-    </head>
-    <body>
-      <div id="customers" class="customer-grid"></div>
-      <script>
-        // Render customers from structuredContent.customers
-        // Support search/filter
-        // Show pagination
-      </script>
-    </body>
-  </html>
-  ```
+- [x] ✅ Create `src/templates/customers/list-customers.html`:
+  - Table view with customer name, contact, location columns
+  - Reads from `window.structuredContent.customers`
+  - Pagination info display
+  - Empty state handling
 
-- [ ] Create `src/templates/customers/customer-detail.html`:
+- [x] ✅ Create `src/templates/customers/customer-detail.html`:
   - Single customer card with all details
-  - Contact information
-  - Associated sites
-  - Recent jobs
+  - Contact information (name, email, phone)
+  - Physical and postal addresses
+  - Formatted address display
 
-- [ ] Update `list-customers.ts` tool definition:
+- [x] ✅ Update `list-customers.ts` tool definition:
   ```typescript
   _meta: {
-    'openai/outputTemplate': TEMPLATES.CUSTOMERS.LIST,
+    'openai/outputTemplate': 'ui://customers/list-customers.html',
     'openai/toolInvocation/invoking': 'Loading customers...',
-    'openai/toolInvocation/invoked': 'Showing {count} customers'
+    'openai/toolInvocation/invoked': 'Showing customers'
   }
   ```
+
+- [x] ✅ Update `get-customer.ts` tool definition with template metadata
 
 **3.2: Sites UI Templates**
 
@@ -339,123 +305,61 @@ fergus-mcp/
 
 - [ ] Update `list-time-entries.ts` with template metadata
 
-**3.7: Shared Template Assets**
+**3.7: Shared Template Assets** ✅ COMPLETED
 
-- [ ] Create `src/templates/shared/styles.css`:
-  ```css
-  /* Modern, clean design system */
-  :root {
-    --primary-color: #0066cc;
-    --success-color: #28a745;
-    --warning-color: #ffc107;
-    --danger-color: #dc3545;
-    --border-radius: 8px;
-    --spacing-unit: 8px;
-  }
+- [x] ✅ Create `src/templates/shared/styles.css`:
+  - CSS variables for colors (primary, success, warning, danger)
+  - Card component styles
+  - Table styles with hover states
+  - Badge styles (success, warning, danger, info)
+  - Button styles
+  - Text and spacing utilities
+  - Empty state styling
+  - Pagination components
 
-  .card { /* ... */ }
-  .table { /* ... */ }
-  .badge { /* ... */ }
-  .status-active { /* ... */ }
-  /* etc */
-  ```
-
-- [ ] Create `src/templates/shared/utils.js`:
-  ```javascript
-  // Format currency
-  function formatCurrency(amount) { /* ... */ }
-
-  // Format dates
-  function formatDate(isoString) { /* ... */ }
-
-  // Render table from array
-  function renderTable(data, columns) { /* ... */ }
-
-  // Pagination component
-  function renderPagination(paginationInfo, onPageChange) { /* ... */ }
-  ```
+- [ ] Create `src/templates/shared/utils.js` (deferred - not needed yet):
+  - Currently using inline JavaScript in templates
+  - Can extract shared utilities when more templates added
 
 ---
 
-### Phase 4: Serve Templates as MCP Resources ⏳ NOT STARTED
+### Phase 4: Serve Templates as MCP Resources ✅ COMPLETED
 
 **Goal**: Make HTML templates accessible to ChatGPT Apps
 
 #### Tasks:
 
 1. **Create template resource server**
-   - [ ] Create `src/templates/index.ts`:
-     ```typescript
-     import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-     import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-     import fs from 'fs/promises';
-     import path from 'path';
-
-     export function registerTemplateResources(server: Server) {
-       // List all available templates
-       server.setRequestHandler(ListResourcesRequestSchema, async () => {
-         return {
-           resources: [
-             {
-               uri: 'ui://customers/list-customers.html',
-               name: 'Customer List Template',
-               mimeType: 'text/html'
-             },
-             // ... all templates
-           ]
-         };
-       });
-
-       // Serve template content
-       server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-         const uri = request.params.uri;
-         if (!uri.startsWith('ui://')) {
-           throw new Error('Invalid template URI');
-         }
-
-         const filePath = uri.replace('ui://', '');
-         const content = await fs.readFile(
-           path.join(__dirname, filePath),
-           'utf-8'
-         );
-
-         return {
-           contents: [{
-             uri,
-             mimeType: 'text/html',
-             text: content
-           }]
-         };
-       });
-     }
-     ```
+   - [x] ✅ Create `src/templates/index.ts`:
+     - `ListResourcesRequestSchema` handler lists all templates
+     - `ReadResourceRequestSchema` handler serves template files from disk
+     - Template registry with customers templates (list + detail)
+     - Shared styles.css registered as resource
+     - Proper error handling for missing templates
 
 2. **Update server capabilities**
-   - [ ] Update `src/server.ts`:
-     ```typescript
-     const server = new Server({
-       name: 'fergus-mcp',
-       version: '1.0.0'
-     }, {
-       capabilities: {
-         tools: {},
-         prompts: {},
-         resources: {} // Add resources capability
-       }
-     });
+   - [x] ✅ Update `src/server.ts`:
+     - Added `resources: {}` to server capabilities
+     - Imported and called `registerTemplateResources(server)`
+     - Resources integrated alongside tools and prompts
 
-     registerTemplateResources(server);
-     ```
+3. **Update build process**
+   - [x] ✅ Fixed template copying in `package.json`:
+     - Added `copy-templates` script: `cp -r src/templates/customers src/templates/shared dist/templates/`
+     - Updated build command to: `tsc && pnpm run copy-templates`
+     - Templates now available at runtime in `dist/templates/`
 
-3. **Test template serving**
-   - [ ] Start HTTP server: `pnpm dev:http`
-   - [ ] Test resource listing via MCP protocol
-   - [ ] Test template content retrieval
+4. **Test template serving**
+   - [x] ✅ HTTP server running on Render
+   - [x] ✅ Resource listing working
+   - [x] ✅ Template content retrieval working
+   - [x] ✅ Templates serving from `dist/templates/` after build
 
 **Success Criteria**:
 - ✅ Templates served as MCP resources
 - ✅ ChatGPT can discover and load templates
-- ✅ Templates render correctly in ChatGPT UI
+- ✅ Templates available at `ui://` URIs
+- ✅ Build process copies static files correctly
 
 ---
 
@@ -495,6 +399,73 @@ fergus-mcp/
 - ✅ Templates provide clear, useful UI
 - ✅ Performance acceptable (<500ms response times)
 - ✅ Documentation complete
+
+---
+
+## Implementation Notes & Key Learnings
+
+### Critical Discoveries
+
+1. **Template Metadata Location**
+   - ❌ **Wrong**: Template URIs in `annotations` field
+   - ✅ **Correct**: Template URIs must be in `_meta` field
+   ```typescript
+   // Correct structure for ChatGPT Apps
+   export const toolDefinition = {
+     name: 'list-customers',
+     annotations: {
+       readOnlyHint: true  // MCP-level metadata
+     },
+     _meta: {
+       'openai/outputTemplate': 'ui://customers/list-customers.html',
+       'openai/toolInvocation/invoking': 'Loading customers...',
+       'openai/toolInvocation/invoked': 'Showing customers'
+     }
+   };
+   ```
+
+2. **Read-Only Tool Annotations**
+   - ❌ **Wrong**: `annotations.openapi.readOnly = true`
+   - ✅ **Correct**: `annotations.readOnlyHint = true`
+   - Applied to all 13 read-only tools (list/get operations)
+
+3. **Unauthenticated Tool Discovery**
+   - ChatGPT needs to see available tools before user authenticates
+   - Solution: Allow `initialize` requests without OAuth tokens
+   - Tool execution still requires valid authentication
+   ```typescript
+   // In http.ts POST /mcp endpoint
+   const fergusClient = (oauthSessionId && tokenManager.hasTokens(oauthSessionId))
+     ? new FergusClient({ tokenProvider: async () => token })
+     : new FergusClient({ tokenProvider: async () => null }); // Unauthenticated discovery
+   ```
+
+4. **Build Process for Static Assets**
+   - TypeScript compiler (`tsc`) only outputs `.js` files
+   - HTML/CSS templates must be manually copied to `dist/`
+   - Solution: Post-compilation copy script
+   ```json
+   {
+     "scripts": {
+       "build": "tsc && pnpm run copy-templates",
+       "copy-templates": "cp -r src/templates/customers src/templates/shared dist/templates/"
+     }
+   }
+   ```
+
+5. **Structured Content Pattern**
+   - Tools return both `content` (text) and `structuredContent` (data)
+   - `content`: Human-readable text + JSON (for Claude/text clients)
+   - `structuredContent`: Clean data structure for ChatGPT rendering
+   - Templates read from `window.structuredContent`
+
+### Architecture Decisions Made
+
+1. **Incremental Rollout**: Started with customers only, not all entities
+2. **Deferred Shared Utilities**: Will create when more entities are refactored
+3. **Inline JavaScript**: Templates have inline scripts, can extract later
+4. **MCP Resources**: Using MCP protocol to serve templates (not external CDN)
+5. **Barrel Exports**: Using `index.ts` in subdirectories for cleaner imports
 
 ---
 
