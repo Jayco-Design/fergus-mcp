@@ -13,18 +13,6 @@
   </div>
 
   <script>
-    // Get structured data from ChatGPT
-    console.log('[Fergus MCP] Template loaded');
-    console.log('[Fergus MCP] window.openai:', window.openai);
-    console.log('[Fergus MCP] toolOutput:', window.openai?.toolOutput);
-    console.log('[Fergus MCP] structuredContent:', window.openai?.toolOutput?.structuredContent);
-
-    const data = window.openai?.toolOutput?.structuredContent || {};
-    const customers = data.customers || [];
-    const pagination = data.pagination || {};
-
-    console.log('[Fergus MCP] Parsed data:', { customers, pagination });
-
     function getInitials(name) {
       if (!name) return '?';
       const parts = name.trim().split(' ');
@@ -32,7 +20,9 @@
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     }
 
-    function render() {
+    function render(data) {
+      const customers = data?.customers || [];
+      const pagination = data?.pagination || {};
       const container = document.getElementById('customers-container');
 
       if (!customers || customers.length === 0) {
@@ -136,8 +126,21 @@
       return div.innerHTML;
     }
 
-    // Render on load
-    render();
+    // Listen for data from ChatGPT Apps SDK
+    window.addEventListener('openai:set_globals', (event) => {
+      console.log('[Fergus MCP] openai:set_globals event:', event.detail);
+      const structuredContent = event.detail?.toolOutput?.structuredContent;
+      if (structuredContent) {
+        render(structuredContent);
+      }
+    });
+
+    // Also render immediately if data is already available (for compatibility)
+    const initialData = window.openai?.toolOutput?.structuredContent;
+    if (initialData) {
+      console.log('[Fergus MCP] Initial data available:', initialData);
+      render(initialData);
+    }
   </script>
 </body>
 </html>

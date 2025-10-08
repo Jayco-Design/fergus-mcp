@@ -12,9 +12,6 @@
   </div>
 
   <script>
-    // Get structured data from ChatGPT
-    const customer = window.openai?.toolOutput?.structuredContent?.customer || {};
-
     function getInitials(name) {
       if (!name) return '?';
       const parts = name.trim().split(' ');
@@ -22,7 +19,7 @@
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     }
 
-    function render() {
+    function render(customer) {
       const container = document.getElementById('customer-detail');
 
       if (!customer || !customer.id) {
@@ -205,8 +202,21 @@
       return div.innerHTML;
     }
 
-    // Render on load
-    render();
+    // Listen for data from ChatGPT Apps SDK
+    window.addEventListener('openai:set_globals', (event) => {
+      console.log('[Fergus MCP] openai:set_globals event:', event.detail);
+      const customer = event.detail?.toolOutput?.structuredContent?.customer;
+      if (customer) {
+        render(customer);
+      }
+    });
+
+    // Also render immediately if data is already available (for compatibility)
+    const initialCustomer = window.openai?.toolOutput?.structuredContent?.customer;
+    if (initialCustomer) {
+      console.log('[Fergus MCP] Initial customer data available:', initialCustomer);
+      render(initialCustomer);
+    }
   </script>
 </body>
 </html>
