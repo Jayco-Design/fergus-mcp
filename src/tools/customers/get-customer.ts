@@ -102,7 +102,7 @@ export async function handleGetCustomer(
     content: [
       {
         type: 'text' as const,
-        text: '', // Empty - widget shows everything
+        text: `Showing details for ${structuredCustomer.name || 'customer'} in the widget above.`,
       },
     ],
     // Structured content for ChatGPT Apps template

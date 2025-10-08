@@ -7,14 +7,14 @@ import { FergusClient } from '../../fergus-client.js';
 
 export const listCustomersToolDefinition = {
   name: 'list-customers',
-  description: 'List customers with optional search filtering',
+  description: 'Display an interactive visual list of customers with optional search filtering. Returns a widget with customer cards.',
   annotations: {
     readOnlyHint: true
   },
   _meta: {
     'openai/outputTemplate': 'ui://customers/list-customers.html',
     'openai/toolInvocation/invoking': 'Loading customers...',
-    'openai/toolInvocation/invoked': 'Showing customers'
+    'openai/toolInvocation/invoked': '' // Empty - might suppress ChatGPT's summary
   },
   inputSchema: {
     type: 'object',
@@ -130,13 +130,12 @@ export async function handleListCustomers(
     } : null,
   }));
 
-  // When using outputTemplate, return empty text content
-  // The visual template will show all the data
+  // Return minimal content - the widget shows everything
   return {
     content: [
       {
         type: 'text' as const,
-        text: '', // Empty - widget shows everything
+        text: `✓ Found ${customers.length} customer${customers.length !== 1 ? 's' : ''}`,
       },
     ],
     // Structured content for ChatGPT Apps to consume
