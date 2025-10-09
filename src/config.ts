@@ -134,7 +134,9 @@ export function loadOAuthConfig(): OAuthConfig {
  */
 export function loadSessionConfig(): SessionConfig {
   const storage = (process.env.SESSION_STORAGE as 'memory' | 'redis') || 'memory';
-  const timeoutMs = parseInt(process.env.SESSION_TIMEOUT_MS || '3600000', 10);
+  // Default to 7 days (OAuth refresh tokens are valid for 365 days in Cognito)
+  // This allows long-lived sessions while still cleaning up truly abandoned sessions
+  const timeoutMs = parseInt(process.env.SESSION_TIMEOUT_MS || '604800000', 10); // 7 days
   const redisUrl = process.env.REDIS_URL;
 
   if (storage === 'redis' && !redisUrl) {

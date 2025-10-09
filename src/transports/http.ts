@@ -277,52 +277,118 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
   });
 
   /**
-   * POST /oauth/token - Exchange authorization code for access token
-   * Called by Claude after user completes authorization
+   * POST /oauth/token - Exchange authorization code for access token OR refresh tokens
+   * Called by Claude after user completes authorization or to refresh an expired token
    * The "code" here is our session ID that we sent to Claude's callback
    */
   app.post('/oauth/token', async (req: Request, res: Response) => {
     try {
-      const { code, grant_type, code_verifier } = req.body;
+      const { code, grant_type, code_verifier, refresh_token } = req.body;
 
-      console.error(`[OAuth] Token exchange request for code: ${code?.substring(0, 8)}...`);
+      console.error(`[OAuth] Token request: grant_type=${grant_type}`);
 
-      // Validate required parameters
-      if (!code || grant_type !== 'authorization_code') {
-        console.error('[OAuth] Invalid token request');
-        res.status(400).json({ error: 'invalid_request' });
+      // Handle refresh token grant
+      if (grant_type === 'refresh_token') {
+        if (!refresh_token) {
+          console.error('[OAuth] Missing refresh_token parameter');
+          res.status(400).json({ error: 'invalid_request', error_description: 'refresh_token is required' });
+          return;
+        }
+
+        // The refresh_token is our old session ID
+        const oldSessionId = refresh_token;
+
+        console.error(`[OAuth] Refresh token request for session: ${oldSessionId.substring(0, 8)}...`);
+
+        // Verify we have tokens for this session
+        const hasTokens = await tokenManager.hasTokens(oldSessionId);
+        if (!hasTokens) {
+          console.error(`[OAuth] Invalid or expired refresh token: ${oldSessionId.substring(0, 8)}...`);
+          res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token is invalid or expired' });
+          return;
+        }
+
+        // Get access token (this will auto-refresh Cognito tokens if needed)
+        const accessToken = await tokenManager.getAccessToken(oldSessionId);
+        if (!accessToken) {
+          console.error(`[OAuth] Failed to refresh access token for session: ${oldSessionId.substring(0, 8)}...`);
+          res.status(401).json({ error: 'invalid_grant', error_description: 'Failed to refresh token, please re-authenticate' });
+          return;
+        }
+
+        // MCP Spec Requirement: For public clients, MUST rotate refresh tokens
+        // Generate new session ID for token rotation
+        const newSessionId = randomUUID();
+
+        // Copy the Cognito tokens to the new session ID
+        const cognitoTokens = await tokenManager.getTokens(oldSessionId);
+        if (cognitoTokens) {
+          await tokenManager.storeTokens(newSessionId, cognitoTokens);
+          console.error(`[OAuth] Rotated refresh token: ${oldSessionId.substring(0, 8)}... -> ${newSessionId.substring(0, 8)}...`);
+        }
+
+        // Invalidate the old refresh token to prevent reuse
+        await tokenManager.deleteTokens(oldSessionId);
+
+        console.error(`[OAuth] Successfully refreshed token for new session: ${newSessionId.substring(0, 8)}...`);
+
+        // Return new session IDs (token rotation for public clients)
+        res.json({
+          access_token: newSessionId, // New access token
+          refresh_token: newSessionId, // New refresh token (rotated)
+          token_type: 'Bearer',
+          expires_in: 3600, // 1 hour (Cognito access token lifetime)
+        });
         return;
       }
 
-      // The "code" is actually our session ID that we gave to Claude
-      const sessionId = code;
+      // Handle authorization code grant
+      if (grant_type === 'authorization_code') {
+        if (!code) {
+          console.error('[OAuth] Missing code parameter');
+          res.status(400).json({ error: 'invalid_request', error_description: 'code is required' });
+          return;
+        }
 
-      // Verify we have tokens for this session
-      if (!tokenManager.hasTokens(sessionId)) {
-        console.error(`[OAuth] Invalid or expired authorization code: ${sessionId.substring(0, 8)}...`);
-        res.status(400).json({ error: 'invalid_grant' });
+        // The "code" is actually our session ID that we gave to Claude
+        const sessionId = code;
+
+        console.error(`[OAuth] Authorization code exchange for session: ${sessionId.substring(0, 8)}...`);
+
+        // Verify we have tokens for this session
+        const hasTokens = await tokenManager.hasTokens(sessionId);
+        if (!hasTokens) {
+          console.error(`[OAuth] Invalid or expired authorization code: ${sessionId.substring(0, 8)}...`);
+          res.status(400).json({ error: 'invalid_grant' });
+          return;
+        }
+
+        // Get token expiry info
+        const accessToken = await tokenManager.getAccessToken(sessionId);
+        if (!accessToken) {
+          console.error(`[OAuth] Failed to retrieve access token for session: ${sessionId.substring(0, 8)}...`);
+          res.status(500).json({ error: 'server_error' });
+          return;
+        }
+
+        console.error(`[OAuth] Successfully exchanged code for token, session: ${sessionId.substring(0, 8)}...`);
+
+        // Return our session ID as both access token and refresh token
+        // Claude will use access_token as Bearer token and refresh_token to get new tokens
+        res.json({
+          access_token: sessionId,
+          refresh_token: sessionId, // Same session ID can be used for refresh
+          token_type: 'Bearer',
+          expires_in: 3600, // 1 hour (Cognito access token lifetime)
+        });
         return;
       }
 
-      // Get token expiry info
-      const accessToken = await tokenManager.getAccessToken(sessionId);
-      if (!accessToken) {
-        console.error(`[OAuth] Failed to retrieve access token for session: ${sessionId.substring(0, 8)}...`);
-        res.status(500).json({ error: 'server_error' });
-        return;
-      }
-
-      console.error(`[OAuth] Successfully exchanged code for token, session: ${sessionId.substring(0, 8)}...`);
-
-      // Return our session ID as the access token
-      // Claude will use this as a Bearer token in all subsequent MCP requests
-      res.json({
-        access_token: sessionId,
-        token_type: 'Bearer',
-        expires_in: 3600, // 1 hour
-      });
+      // Unsupported grant type
+      console.error(`[OAuth] Unsupported grant_type: ${grant_type}`);
+      res.status(400).json({ error: 'unsupported_grant_type' });
     } catch (error) {
-      console.error('[OAuth] Error exchanging code for token:', error);
+      console.error('[OAuth] Error in token endpoint:', error);
       res.status(500).json({ error: 'server_error' });
     }
   });

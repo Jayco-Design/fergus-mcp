@@ -130,6 +130,8 @@ export class SessionManager {
 
   /**
    * Cleans up inactive sessions that have exceeded the timeout
+   * Note: This only cleans up MCP transport sessions, NOT OAuth tokens
+   * OAuth tokens are managed separately by TokenManager and have their own TTL
    * @returns Number of sessions cleaned up
    */
   cleanupInactiveSessions(): number {
