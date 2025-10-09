@@ -702,10 +702,10 @@ RATE_LIMIT_WINDOW_MS=900000
 
 ---
 
-**Document Version**: 2.1
+**Document Version**: 2.2
 **Created**: 2025-10-07
-**Last Updated**: 2025-10-09
-**Status**: Phases 1-3 Complete, Ready for Deployment
+**Last Updated**: 2025-10-10
+**Status**: Phases 1-3 Complete, OAuth Refresh Token Flow Implemented, Ready for Deployment
 
 ## Implementation Summary
 
@@ -745,6 +745,9 @@ RATE_LIMIT_WINDOW_MS=900000
 3. **Bearer Token Pattern**: Used Bearer tokens (not cookies) for MCP session authentication, compatible with Claude Desktop's OAuth implementation
 4. **Automatic Storage Selection**: Server detects `SESSION_STORAGE` and `REDIS_URL` environment variables and auto-configures appropriate backend
 5. **TTL in Redis**: Tokens automatically expire using Redis TTL, no manual cleanup needed
+6. **OAuth Refresh Token Flow**: Implemented MCP spec-compliant refresh token support with token rotation for public clients
+7. **Two-Layer Authentication**: Proxy OAuth between Claude and MCP server, backend OAuth between MCP server and Cognito/Fergus API
+8. **Extended Session Timeout**: Default session timeout increased from 1 hour to 7 days to support long-lived OAuth sessions
 
 ### Files Added
 
@@ -780,6 +783,7 @@ RATE_LIMIT_WINDOW_MS=900000
 - OAuth authentication via Cognito
 - Sessions stored in-memory
 - Perfect for local testing
+- OAuth refresh token support with automatic rotation
 
 **Production** (HTTP mode, Redis):
 - Deploy to Render with `render.yaml`
@@ -787,6 +791,8 @@ RATE_LIMIT_WINDOW_MS=900000
 - Sessions persisted in Redis
 - Auto-scaling, SSL, internal networking
 - Free tier available ($0/month)
+- OAuth refresh token flow with MCP spec-compliant token rotation
+- Long-lived sessions (7 days default, configurable)
 
 ### Ready for Deployment
 
@@ -803,6 +809,107 @@ RATE_LIMIT_WINDOW_MS=900000
 ---
 
 **Next Engineer**: Deploy to Render following DEPLOYMENT.md guide, then proceed with Phase 4 advanced features if desired.
+
+## Changelog
+
+### v2.2 (2025-10-10) - OAuth Refresh Token Flow
+**OAuth Persistence and Token Rotation**
+
+Fixed authentication expiration issue where sessions would become unauthenticated after delays (e.g., overnight):
+
+**Root Cause Identified**:
+- MCP sessions were being cleaned up after 1 hour of inactivity
+- OAuth tokens (valid for 365 days in Cognito) were orphaned when sessions expired
+- Claude Desktop wasn't sending Bearer tokens when re-initializing after session expiry
+- No refresh token support meant Claude couldn't refresh expired access tokens
+
+**Implementation**:
+1. **OAuth Refresh Token Grant** (`/oauth/token` with `grant_type=refresh_token`)
+   - Added full support for refresh token flow per MCP OAuth 2.1 specification
+   - Implements refresh token rotation for public clients (REQUIRED by MCP spec)
+   - Old refresh tokens are invalidated after use to prevent token reuse attacks
+   - Cognito tokens are automatically refreshed via `RedisTokenManager.getAccessToken()`
+
+2. **Token Rotation Security**:
+   - MCP session IDs are rotated on each refresh (new UUID generated)
+   - Cognito refresh tokens are also rotated (Cognito setting: "Enable refresh token rotation")
+   - Both layers properly handle and propagate rotated tokens
+   - Comprehensive logging tracks token rotation flow for debugging
+
+3. **Extended Session Lifetime**:
+   - Default `SESSION_TIMEOUT_MS` increased from 1 hour (3600000ms) to 7 days (604800000ms)
+   - Aligns with OAuth token lifetime while still cleaning up abandoned sessions
+   - Sessions with valid OAuth tokens persist across hours/days of inactivity
+   - Configurable via environment variable for different deployment scenarios
+
+4. **Two-Layer OAuth Architecture**:
+   - **Layer 1**: Claude ↔ MCP Server (proxy OAuth)
+     - Claude gets session ID as both access_token and refresh_token
+     - Session IDs are rotated on refresh for security
+   - **Layer 2**: MCP Server ↔ Cognito ↔ Fergus API
+     - MCP server uses Cognito tokens to call Fergus API
+     - Cognito tokens are auto-refreshed when expired
+     - Cognito refresh tokens are rotated per Cognito settings
+
+5. **Comprehensive Debug Logging** (temporary):
+   - Redacted token logging (first 8-12 chars, last 4-8 chars)
+   - Tracks OAuth flow: initial auth → code exchange → token refresh → Cognito refresh
+   - Emoji markers for easy log scanning (🔄 refresh, 📦 tokens, ✅ success, ❌ error)
+   - Shows token rotation in action (old → new session IDs, old → new Cognito tokens)
+
+**Files Modified**:
+- `src/transports/http.ts` - Added `grant_type=refresh_token` support with token rotation
+- `src/config.ts` - Increased default SESSION_TIMEOUT_MS to 7 days
+- `src/auth/session-manager.ts` - Added documentation about OAuth vs MCP session separation
+- `src/auth/redis-token-manager.ts` - Added detailed Cognito token refresh logging
+
+**MCP Spec Compliance**:
+- ✅ Supports both `authorization_code` and `refresh_token` grant types
+- ✅ Implements refresh token rotation for public clients (per MCP OAuth 2.1 spec)
+- ✅ Returns both `access_token` and `refresh_token` in token responses
+- ✅ Proper `expires_in` value (3600 seconds = 1 hour Cognito access token lifetime)
+- ✅ Graceful error handling with OAuth-compliant error responses
+
+**Testing Plan**:
+1. Deploy with debug logging enabled
+2. Test initial authentication flow
+3. Wait >1 hour and test automatic token refresh
+4. Verify token rotation in logs (both MCP and Cognito layers)
+5. Confirm sessions persist across delays without re-authentication
+6. Remove debug logging once confirmed working
+
+**Expected Behavior**:
+- Users authenticate once via OAuth
+- Sessions remain valid for up to 7 days of inactivity (configurable)
+- Tokens automatically refresh every ~1 hour without user interaction
+- No more "access token has expired or is invalid" errors after delays
+- Token rotation happens transparently at both OAuth layers
+
+### v2.1 (2025-10-09) - Production Deployment Ready
+**Redis Session Storage and Render Deployment**
+
+Implemented Redis session storage with swappable storage backends and comprehensive Render deployment configuration.
+
+**Implementation**:
+- Created `ITokenManager` interface for swappable storage backends
+- Implemented `RedisTokenManager` using ioredis (v5.8.1)
+- Auto-select storage backend based on environment configuration
+- Graceful shutdown for Redis connections
+- Complete Render deployment setup with `render.yaml` (Infrastructure as Code)
+- Comprehensive documentation: `DEPLOYMENT.md` (step-by-step), `RENDER_QUICKSTART.md` (quick reference)
+
+### v2.0 (2025-10-09) - OAuth 2.0 Integration Complete
+**Claude Desktop Remote Mode Support**
+
+Successfully implemented OAuth 2.0 authentication with AWS Cognito, enabling remote MCP server usage in Claude Web and Claude Desktop.
+
+**Implementation**:
+- AWS Cognito OAuth 2.0 flow with PKCE support
+- RFC8414 OAuth discovery endpoints
+- RFC7591 dynamic client registration
+- Bearer token authentication (Claude Desktop compatible)
+- Token exchange and refresh mechanisms
+- Session management with in-memory storage
 
 ## Notes for Engineers
 
