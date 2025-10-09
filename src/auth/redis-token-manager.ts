@@ -135,14 +135,16 @@ export class RedisTokenManager implements ITokenManager {
       throw new Error(`No refresh token available for session ${sessionId}`);
     }
 
-    console.error(`[RedisTokenManager] Refreshing token for session ${sessionId}`);
+    console.error(`[RedisTokenManager] 🔄 Refreshing Cognito tokens for session ${sessionId}`);
+    console.error(`[RedisTokenManager] 📦 OLD Cognito refresh token: ${stored.tokens.refreshToken.substring(0, 12)}...${stored.tokens.refreshToken.substring(stored.tokens.refreshToken.length - 8)}`);
 
     try {
       const newTokens = await refreshAccessToken(this.config, stored.tokens.refreshToken);
+      console.error(`[RedisTokenManager] 📦 NEW Cognito tokens - access: ${newTokens.accessToken.substring(0, 12)}...${newTokens.accessToken.substring(newTokens.accessToken.length - 8)}, refresh: ${newTokens.refreshToken?.substring(0, 12)}...${newTokens.refreshToken?.substring(newTokens.refreshToken.length - 8) || 'none'}`);
       await this.storeTokens(sessionId, newTokens);
-      console.error(`[RedisTokenManager] Successfully refreshed tokens for session ${sessionId}`);
+      console.error(`[RedisTokenManager] ✅ Successfully refreshed and stored Cognito tokens for session ${sessionId}`);
     } catch (error) {
-      console.error(`[RedisTokenManager] Failed to refresh token for session ${sessionId}:`, error);
+      console.error(`[RedisTokenManager] ❌ Failed to refresh Cognito token for session ${sessionId}:`, error);
       throw error;
     }
   }
