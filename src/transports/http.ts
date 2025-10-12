@@ -54,8 +54,9 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
   // Initialize token manager based on session storage type
   let tokenManager;
   if (config.session.storage === 'redis' && config.session.redisUrl) {
-    tokenManager = new RedisTokenManager(config.oauth, config.session.redisUrl);
-    console.error(`[HTTP OAuth Server] Token storage: redis`);
+    tokenManager = new RedisTokenManager(config.oauth, config.session.redisUrl, config.session.timeoutMs);
+    const ttlDays = Math.floor(config.session.timeoutMs / (1000 * 60 * 60 * 24));
+    console.error(`[HTTP OAuth Server] Token storage: redis (TTL: ${ttlDays} days from SESSION_TIMEOUT_MS)`);
   } else if (config.session.storage === 'file' || process.env.NODE_ENV === 'development') {
     tokenManager = new FileTokenManager(config.oauth);
     console.error(`[HTTP OAuth Server] Token storage: file (persistent across restarts)`);

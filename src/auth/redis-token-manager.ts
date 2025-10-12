@@ -22,9 +22,11 @@ export class RedisTokenManager implements ITokenManager {
   private config: OAuthConfig;
   private refreshThresholdMs = 5 * 60 * 1000; // Refresh if < 5 minutes remaining
   private keyPrefix = 'fergus-mcp:tokens:';
+  private sessionTimeoutMs: number; // TTL for Redis keys (from SESSION_TIMEOUT_MS env var)
 
-  constructor(config: OAuthConfig, redisUrl: string) {
+  constructor(config: OAuthConfig, redisUrl: string, sessionTimeoutMs?: number) {
     this.config = config;
+    this.sessionTimeoutMs = sessionTimeoutMs || 7 * 24 * 60 * 60 * 1000; // Default: 7 days
     this.redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
@@ -56,11 +58,14 @@ export class RedisTokenManager implements ITokenManager {
     };
 
     const key = this.getKey(sessionId);
-    const ttl = tokens.expiresIn + 3600; // Add 1 hour buffer
+    // Use SESSION_TIMEOUT_MS for Redis TTL (should match refresh token lifetime, not access token)
+    // Access tokens expire in 1 hour, but we need to keep refresh tokens for the full session duration
+    const ttl = Math.floor(this.sessionTimeoutMs / 1000); // Convert ms to seconds
 
     await this.redis.setex(key, ttl, JSON.stringify(stored));
 
-    console.error(`[RedisTokenManager] Stored tokens for session ${sessionId}, expires at ${expiresAt.toISOString()}`);
+    const ttlDays = Math.floor(ttl / 86400);
+    console.error(`[RedisTokenManager] Stored tokens for session ${sessionId}, Redis TTL: ${ttl}s (${ttlDays} days), Cognito access token expires at ${expiresAt.toISOString()}`);
   }
 
   /**
