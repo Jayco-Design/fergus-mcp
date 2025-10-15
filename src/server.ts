@@ -82,7 +82,10 @@ import {
 // Prompt handlers
 import { jobCreationAssistantPromptDefinition, getJobCreationAssistantPrompt } from './prompts/job-creation-assistant.js';
 import { quoteGeneratorPromptDefinition, getQuoteGeneratorPrompt } from './prompts/quote-generator.js';
-import { weeklyReportPromptDefinition, getWeeklyReportPrompt } from './prompts/weekly-report.js';
+// import { weeklyReportPromptDefinition, getWeeklyReportPrompt } from './prompts/weekly-report.js';
+import { quoteDetailFinderPromptDefinition, getQuoteDetailFinderPrompt } from './prompts/quote-detail-finder.js';
+import { jobProgressSnapshotPromptDefinition, getJobProgressSnapshotPrompt } from './prompts/job-progress-snapshot.js';
+import { revenuePipelineSummaryPromptDefinition, getRevenuePipelineSummaryPrompt } from './prompts/revenue-pipeline-summary.js';
 
 // Template resources
 import { registerTemplateResources } from './templates/index.js';
@@ -150,7 +153,10 @@ export function createMcpServer(fergusClient: FergusClient): Server {
       prompts: [
         jobCreationAssistantPromptDefinition,
         quoteGeneratorPromptDefinition,
-        weeklyReportPromptDefinition,
+        // weeklyReportPromptDefinition,
+        quoteDetailFinderPromptDefinition,
+        jobProgressSnapshotPromptDefinition,
+        revenuePipelineSummaryPromptDefinition,
       ],
     };
   });
@@ -171,8 +177,23 @@ export function createMcpServer(fergusClient: FergusClient): Server {
         }
         return getQuoteGeneratorPrompt(args as { jobId: string });
 
-      case 'weekly-report':
-        return getWeeklyReportPrompt(args as { dateFrom?: string; dateTo?: string });
+      // case 'weekly-report':
+      //   return getWeeklyReportPrompt(args as { dateFrom?: string; dateTo?: string });
+
+      case 'quote-detail-finder':
+        if (!args?.searchTerm) {
+          throw new Error('searchTerm is required for quote-detail-finder prompt');
+        }
+        return getQuoteDetailFinderPrompt(args as { searchTerm: string });
+
+      case 'job-progress-snapshot':
+        if (!args?.jobRef) {
+          throw new Error('jobRef is required for job-progress-snapshot prompt');
+        }
+        return getJobProgressSnapshotPrompt(args as { jobRef: string });
+
+      case 'revenue-pipeline-summary':
+        return getRevenuePipelineSummaryPrompt(args as { dateFrom?: string; dateTo?: string });
 
       default:
         throw new Error(`Unknown prompt: ${name}`);
