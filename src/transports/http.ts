@@ -255,15 +255,13 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Exchange code for tokens from Cognito
       const tokens = await exchangeCodeForTokens(config.oauth, code, stateData.codeVerifier);
 
-      console.error(`[OAuth] 📦 Received Cognito tokens - access: ${tokens.accessToken.substring(0, 12)}...${tokens.accessToken.substring(tokens.accessToken.length - 8)}, refresh: ${tokens.refreshToken?.substring(0, 12)}...${tokens.refreshToken?.substring(tokens.refreshToken.length - 8) || 'none'}, expires_in: ${tokens.expiresIn}s`);
-
       // Generate our own session ID
       const sessionId = randomUUID();
 
       // Store Cognito tokens
       tokenManager.storeTokens(sessionId, tokens);
 
-      console.error(`[OAuth] ✅ Stored tokens in MCP session: ${sessionId.substring(0, 8)}...${sessionId.substring(sessionId.length - 4)}`);
+      console.error('[OAuth] ✅ Stored tokens in MCP session');
 
       // Redirect to Claude's callback with our authorization code
       const clientRedirectUri = stateData.clientRedirectUri || 'https://claude.ai/api/mcp/auth_callback';
@@ -301,26 +299,21 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         // The refresh_token is our old session ID
         const oldSessionId = refresh_token;
 
-        console.error(`[OAuth] 🔄 REFRESH REQUEST - Received refresh_token: ${oldSessionId.substring(0, 8)}...${oldSessionId.substring(oldSessionId.length - 4)}`);
+        console.error('[OAuth] 🔄 Handling refresh_token grant');
 
         // Verify we have tokens for this session
         const hasTokens = await tokenManager.hasTokens(oldSessionId);
         if (!hasTokens) {
-          console.error(`[OAuth] ❌ Invalid or expired refresh token: ${oldSessionId.substring(0, 8)}...${oldSessionId.substring(oldSessionId.length - 4)}`);
+          console.error('[OAuth] ❌ Invalid or expired refresh token');
           res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token is invalid or expired' });
           return;
         }
 
         // Get Cognito tokens before refresh
-        const cognitoTokensBefore = await tokenManager.getTokens(oldSessionId);
-        if (cognitoTokensBefore) {
-          console.error(`[OAuth] 📦 Cognito tokens BEFORE refresh - access: ${cognitoTokensBefore.accessToken.substring(0, 12)}...${cognitoTokensBefore.accessToken.substring(cognitoTokensBefore.accessToken.length - 8)}, refresh: ${cognitoTokensBefore.refreshToken?.substring(0, 12)}...${cognitoTokensBefore.refreshToken?.substring(cognitoTokensBefore.refreshToken.length - 8) || 'none'}`);
-        }
-
         // Get access token (this will auto-refresh Cognito tokens if needed)
         const accessToken = await tokenManager.getAccessToken(oldSessionId);
         if (!accessToken) {
-          console.error(`[OAuth] ❌ Failed to refresh Cognito access token for session: ${oldSessionId.substring(0, 8)}...${oldSessionId.substring(oldSessionId.length - 4)}`);
+          console.error('[OAuth] ❌ Failed to refresh Cognito access token for session');
           res.status(401).json({ error: 'invalid_grant', error_description: 'Failed to refresh token, please re-authenticate' });
           return;
         }
@@ -332,15 +325,12 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         // Copy the Cognito tokens to the new session ID
         const cognitoTokens = await tokenManager.getTokens(oldSessionId);
         if (cognitoTokens) {
-          console.error(`[OAuth] 📦 Cognito tokens AFTER refresh - access: ${cognitoTokens.accessToken.substring(0, 12)}...${cognitoTokens.accessToken.substring(cognitoTokens.accessToken.length - 8)}, refresh: ${cognitoTokens.refreshToken?.substring(0, 12)}...${cognitoTokens.refreshToken?.substring(cognitoTokens.refreshToken.length - 8) || 'none'}`);
           await tokenManager.storeTokens(newSessionId, cognitoTokens);
-          console.error(`[OAuth] 🔄 Rotated MCP session: ${oldSessionId.substring(0, 8)}...${oldSessionId.substring(oldSessionId.length - 4)} -> ${newSessionId.substring(0, 8)}...${newSessionId.substring(newSessionId.length - 4)}`);
+          console.error('[OAuth] 🔄 Rotated MCP session after refresh');
         }
 
         // Invalidate the old refresh token to prevent reuse
         await tokenManager.deleteTokens(oldSessionId);
-
-        console.error(`[OAuth] ✅ REFRESH RESPONSE - Sending access_token: ${newSessionId.substring(0, 8)}...${newSessionId.substring(newSessionId.length - 4)}, refresh_token: ${newSessionId.substring(0, 8)}...${newSessionId.substring(newSessionId.length - 4)}`);
 
         // Return new session IDs (token rotation for public clients)
         res.json({
@@ -363,31 +353,23 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         // The "code" is actually our session ID that we gave to Claude
         const sessionId = code;
 
-        console.error(`[OAuth] 🎫 AUTH CODE REQUEST - Received code: ${sessionId.substring(0, 8)}...${sessionId.substring(sessionId.length - 4)}`);
+        console.error('[OAuth] 🎫 Handling authorization_code grant');
 
         // Verify we have tokens for this session
         const hasTokens = await tokenManager.hasTokens(sessionId);
         if (!hasTokens) {
-          console.error(`[OAuth] ❌ Invalid or expired authorization code: ${sessionId.substring(0, 8)}...${sessionId.substring(sessionId.length - 4)}`);
+          console.error('[OAuth] ❌ Invalid or expired authorization code');
           res.status(400).json({ error: 'invalid_grant' });
           return;
-        }
-
-        // Get Cognito tokens
-        const cognitoTokens = await tokenManager.getTokens(sessionId);
-        if (cognitoTokens) {
-          console.error(`[OAuth] 📦 Cognito tokens - access: ${cognitoTokens.accessToken.substring(0, 12)}...${cognitoTokens.accessToken.substring(cognitoTokens.accessToken.length - 8)}, refresh: ${cognitoTokens.refreshToken?.substring(0, 12)}...${cognitoTokens.refreshToken?.substring(cognitoTokens.refreshToken.length - 8) || 'none'}`);
         }
 
         // Get token expiry info
         const accessToken = await tokenManager.getAccessToken(sessionId);
         if (!accessToken) {
-          console.error(`[OAuth] ❌ Failed to retrieve access token for session: ${sessionId.substring(0, 8)}...${sessionId.substring(sessionId.length - 4)}`);
+          console.error('[OAuth] ❌ Failed to retrieve access token for session');
           res.status(500).json({ error: 'server_error' });
           return;
         }
-
-        console.error(`[OAuth] ✅ AUTH CODE RESPONSE - Sending access_token: ${sessionId.substring(0, 8)}...${sessionId.substring(sessionId.length - 4)}, refresh_token: ${sessionId.substring(0, 8)}...${sessionId.substring(sessionId.length - 4)}`);
 
         // Return our session ID as both access token and refresh token
         // Claude will use access_token as Bearer token and refresh_token to get new tokens
