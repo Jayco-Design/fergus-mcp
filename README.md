@@ -41,15 +41,32 @@ Or add it manually to your Claude Desktop config:
 }
 ```
 
-### Option 2: Remote Mode (HTTP) - Claude Web/Desktop
+### Option 2: Remote Mode (HTTP) - Remote Clients
 
-For remote access (requires hosting the HTTP server):
+Before you begin:
+- You can host your own version of this MCP server.
+- If you just want to try things quickly, we maintain a shared test instance at `https://fergus-mcp-server.onrender.com/mcp`, but we do not guarantee it will always be available.
 
-1. **Host the HTTP server** (see [Deployment](#deployment) section)
-2. **Add as remote server** in Claude:
-   - Claude will discover OAuth endpoints automatically
-   - Authenticate with your Fergus account via OAuth
-   - No manual token configuration needed!
+#### Claude Web & Claude Desktop (Remote connectors)
+
+1. Launch Claude Desktop (v1.8.2+) or visit [claude.ai](https://claude.ai), open **Settings → Model Context**.
+2. Enable **Remote connectors**, click **Add remote server**, and enter your hosted server’s domain (no path or protocol).
+3. Approve the connector when prompted. Claude validates the domain, discovers the MCP metadata automatically, and opens the OAuth window supplied by your Fergus deployment.
+4. Complete the Fergus OAuth sign-in. Claude stores the session and the connector appears in the Model Context panel. Repeat these steps for each team member that needs access.
+
+#### ChatGPT Custom Connectors
+
+1. In ChatGPT (web app), open **Settings → Connectors → Remote MCP servers**.
+2. Select **Add remote server**, provide the public domain where your Fergus MCP server is hosted, and confirm.
+3. ChatGPT fetches the server manifest; approve the prompt to trust the domain and follow the Fergus OAuth flow. When the redirect completes, the connector appears under **My connectors** for future chats.
+
+#### Cursor IDE (v0.45+)
+
+1. In Cursor, open **Settings → MCP** and toggle **Enable remote MCPs**.
+2. Click **Add remote MCP**, supply the public domain for your Fergus MCP deployment, and confirm. Cursor validates the well-known endpoints and prompts you through the OAuth sign-in.
+3. Once the handshake finishes, select the `fergus` connector inside your chat sidebar whenever you want Cursor to call Fergus tools.
+
+> Tip: If you rotate OAuth credentials or change `PUBLIC_URL`, re-run these client setup steps so each client refreshes its metadata and tokens.
 
 ### Local Development
 
