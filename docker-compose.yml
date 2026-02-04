@@ -1,0 +1,7 @@
+services:
+  fergus-mcp:
+    build: .
+    env_file:
+      - .env.container
+    ports:
+      - "3100:3100"

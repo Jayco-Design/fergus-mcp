@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-pnpm-lock.yaml
 
 # Build outputs
 dist/
@@ -11,6 +10,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.container
 
 # IDE
 .vscode/

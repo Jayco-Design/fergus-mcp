@@ -81,11 +81,6 @@ Before you begin:
    ```
 4. Run in development mode:
 
-   **Stdio mode** (for testing with local MCP clients):
-   ```bash
-   pnpm run dev -- --api-token YOUR_API_TOKEN
-   ```
-
    **HTTP mode** (for testing remote server):
    ```bash
    # Create .env file with OAuth credentials
@@ -101,9 +96,13 @@ Before you begin:
 **Personal Access Token (PAT)** is required. Get yours from your Fergus account settings.
 
 #### Option 1: Command-line argument (Recommended)
-
-```bash
-npx fergus-mcp --api-token YOUR_API_TOKEN
+Add this configuration to your ai client connectors settings:
+```json
+{
+  "command": "pnpm",
+  "args": ["--dir", "/Users/arthurdy/git/fergus/fergus-mcp", "start"],
+  "env": { "FERGUS_API_TOKEN": "YOUR_API_TOKEN" }
+}
 ```
 
 #### Option 2: Environment variable
@@ -233,9 +232,9 @@ pnpm run dev:http
 ### Scripts
 
 - `pnpm run build` - Build the project
-- `pnpm run dev` - Run stdio server in development mode
+- `pnpm run docker:build` - build the image for docker
 - `pnpm run dev:http` - Run HTTP server in development mode
-- `pnpm start` - Run built stdio server
+- `pnpm start` - entry point for stdio
 - `pnpm start:http` - Run built HTTP server
 
 ## Deployment
