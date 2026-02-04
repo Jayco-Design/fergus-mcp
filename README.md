@@ -97,10 +97,11 @@ Before you begin:
 
 #### Option 1: Command-line argument (Recommended)
 Add this configuration to your ai client connectors settings:
+directory is basepath of fergus-mcp project.
 ```json
 {
   "command": "pnpm",
-  "args": ["--dir", "/Users/arthurdy/git/fergus/fergus-mcp", "start"],
+  "args": ["--dir", "path/to/fergus-mcp", "start"],
   "env": { "FERGUS_API_TOKEN": "YOUR_API_TOKEN" }
 }
 ```

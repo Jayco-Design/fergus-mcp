@@ -97,7 +97,7 @@ import { registerTemplateResources } from './templates/index.js';
  */
 export function createMcpServer(fergusClient: FergusClient): Server {
   // Create MCP server
-  console.error('createMcpServer');
+  console.info('MCP Server initialised');
   const server = new Server(
     {
       name: 'fergus-mcp',
@@ -116,7 +116,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
    * Handler for listing available tools
    */
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    console.error('ListToolsRequestSchema');
+    console.info('Tools listed');
     return {
       tools: [
         getJobToolDefinition,
@@ -170,7 +170,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    console.error('GetPromptRequestSchema', name);
+    console.info('Prompt requested', name);
 
     switch (name) {
       case 'job-creation-assistant':
