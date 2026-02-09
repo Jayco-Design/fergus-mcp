@@ -166,7 +166,6 @@ export function createMcpServer(fergusClient: FergusClient): Server {
    */
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-
     switch (name) {
       case 'job-creation-assistant':
         return getJobCreationAssistantPrompt(args as { jobType?: string });

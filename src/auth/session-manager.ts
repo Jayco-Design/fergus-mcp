@@ -13,6 +13,7 @@ export interface SessionData {
   fergusClient: FergusClient;
   createdAt: Date;
   lastAccessedAt: Date;
+  oauthSessionId?: string;
 }
 
 /**
@@ -20,6 +21,7 @@ export interface SessionData {
  */
 export class SessionManager {
   private sessions = new Map<string, SessionData>();
+  private oauthSessionToMcpSession = new Map<string, string>();
   private config: SessionConfig;
   private cleanupIntervalId?: NodeJS.Timeout;
 
@@ -39,7 +41,8 @@ export class SessionManager {
   createSession(
     sessionId: string,
     transport: StreamableHTTPServerTransport,
-    fergusClient: FergusClient
+    fergusClient: FergusClient,
+    oauthSessionId?: string
   ): void {
     const now = new Date();
 
@@ -49,7 +52,12 @@ export class SessionManager {
       fergusClient,
       createdAt: now,
       lastAccessedAt: now,
+      oauthSessionId,
     });
+
+    if (oauthSessionId) {
+      this.oauthSessionToMcpSession.set(oauthSessionId, sessionId);
+    }
 
     console.error(`[SessionManager] Created session ${sessionId} at ${now.toISOString()}`);
   }
@@ -66,8 +74,29 @@ export class SessionManager {
       // Update last accessed time
       session.lastAccessedAt = new Date();
     }
+    console.error(`[SessionManager] Fetched session ${sessionId} at ${session?.lastAccessedAt.toISOString()}`);
 
     return session || null;
+  }
+
+  /**
+   * Gets session data by OAuth session ID
+   */
+  getSessionByOAuthSessionId(oauthSessionId: string): SessionData | null {
+    const sessionId = this.oauthSessionToMcpSession.get(oauthSessionId);
+    if (!sessionId) {
+      return null;
+    }
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      this.oauthSessionToMcpSession.delete(oauthSessionId);
+      return null;
+    }
+    session.lastAccessedAt = new Date();
+    console.error(
+      `[SessionManager] Fetched session ${sessionId} via OAuth session ${oauthSessionId}`
+    );
+    return session;
   }
 
   /**
@@ -108,6 +137,9 @@ export class SessionManager {
       }
 
       this.sessions.delete(sessionId);
+      if (session.oauthSessionId) {
+        this.oauthSessionToMcpSession.delete(session.oauthSessionId);
+      }
       console.error(`[SessionManager] Deleted session ${sessionId}`);
     }
   }

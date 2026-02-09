@@ -32,19 +32,6 @@ interface OAuthStateData {
 const oauthStates = new Map<string, OAuthStateData>();
 
 /**
- * HTTP transport configuration options
- */
-export interface HttpTransportConfig {
-  port: number;
-  host: string;
-  allowedOrigins?: string[];
-  allowedHosts?: string[];
-  enableDnsRebindingProtection?: boolean;
-  apiToken?: string;  // Optional: for backward compatibility with non-OAuth mode
-  fergusBaseUrl?: string;
-}
-
-/**
  * Create and start HTTP transport server with OAuth support
  */
 export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<void> {
@@ -123,6 +110,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
   // Standard path
   app.get('/.well-known/oauth-authorization-server', oauthMetadataHandler);
+  app.get('/oauth/token/.well-known/openid-configuration', oauthMetadataHandler);
 
   // Claude Desktop also tries with /mcp suffix
   app.get('/.well-known/oauth-authorization-server/mcp', oauthMetadataHandler);
@@ -396,7 +384,11 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
    */
   app.post('/mcp', async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    let transport: StreamableHTTPServerTransport;
+    const authHeader = req.headers.authorization;
+    const oauthSessionId = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : undefined;
+    let transport: StreamableHTTPServerTransport | undefined;
 
     if (sessionId && sessionManager.hasSession(sessionId)) {
       // Reuse existing session
@@ -418,11 +410,16 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // New initialization request
       // ChatGPT needs unauthenticated access to discover tools
       // Check for Bearer token in Authorization header (optional for discovery)
-      const authHeader = req.headers.authorization;
-      let oauthSessionId: string | undefined;
-
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        oauthSessionId = authHeader.substring(7);
+      if (!oauthSessionId) {
+        res.status(401).json({
+          jsonrpc: '2.0',
+          error: {
+            code: 401,
+            message: 'Authentication required',
+          },
+          id: null,
+        });
+        return;
       }
 
       // Create FergusClient - use OAuth if available, otherwise null (for discovery only)
@@ -447,10 +444,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         const mcpSessionId = randomUUID();
 
         // Create transport
-        transport = new StreamableHTTPServerTransport({
+        const newTransport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => mcpSessionId,
           onsessioninitialized: (newSessionId) => {
-            sessionManager.createSession(newSessionId, transport, fergusClient);
+            sessionManager.createSession(newSessionId, newTransport, fergusClient, oauthSessionId);
             console.error(`[MCP] Session initialized successfully: ${newSessionId}`);
           },
           // Disable DNS rebinding protection for remote OAuth connections
@@ -459,23 +456,24 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
           allowedHosts: config.allowedHosts,
           allowedOrigins: config.allowedOrigins,
         });
+        transport = newTransport;
 
         // Clean up MCP session on transport close
         // Note: We don't delete OAuth tokens here as they should persist across MCP sessions
-        transport.onclose = () => {
-          if (transport.sessionId) {
-            console.error(`[MCP] Closing transport for session ${transport.sessionId}`);
-            sessionManager.deleteSession(transport.sessionId);
+        newTransport.onclose = () => {
+          if (newTransport.sessionId) {
+            console.error(`[MCP] Closing transport for session ${newTransport.sessionId}`);
+            sessionManager.deleteSession(newTransport.sessionId);
           }
         };
 
         // Create and connect MCP server
         const server = createMcpServer(fergusClient);
-        await server.connect(transport);
+        await server.connect(newTransport);
       } catch (error) {
         console.error(`[MCP] Error during initialization:`, error);
         throw error;
-      }
+      }      
     } else {
       // Invalid request
       res.status(400).json({
@@ -483,6 +481,18 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         error: {
           code: -32000,
           message: 'Bad Request: No valid session ID provided or missing initialize request',
+        },
+        id: null,
+      });
+      return;
+    }
+
+    if (!transport) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32000,
+          message: 'Failed to resolve MCP transport',
         },
         id: null,
       });
@@ -498,9 +508,21 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
    */
   app.get('/mcp', async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const authHeader = req.headers.authorization;
+    const oauthSessionId = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : undefined;
+    let resolvedSessionId = sessionId;
+
+    if (!resolvedSessionId && oauthSessionId) {
+      const session = sessionManager.getSessionByOAuthSessionId(oauthSessionId);
+      if (session) {
+        resolvedSessionId = session.sessionId;
+      }
+    }
 
     // If no session ID, this might be a preflight check - return OAuth info
-    if (!sessionId) {
+    if (!resolvedSessionId) {
       const baseUrl = config.publicUrl || `https://${req.get('host')}`;
       res.status(401).json({
         error: 'Authentication required',
@@ -509,18 +531,18 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       return;
     }
 
-    if (!sessionManager.hasSession(sessionId)) {
+    if (!sessionManager.hasSession(resolvedSessionId)) {
       res.status(400).send('Invalid or missing session ID');
       return;
     }
 
-    const session = sessionManager.getSession(sessionId);
+    const session = sessionManager.getSession(resolvedSessionId);
     if (!session) {
       res.status(400).send('Session not found');
       return;
     }
 
-    sessionManager.updateLastAccessed(sessionId);
+    sessionManager.updateLastAccessed(resolvedSessionId);
     await session.transport.handleRequest(req, res);
   });
 
@@ -529,20 +551,32 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
    */
   app.delete('/mcp', async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const authHeader = req.headers.authorization;
+    const oauthSessionId = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : undefined;
+    let resolvedSessionId = sessionId;
 
-    if (!sessionId || !sessionManager.hasSession(sessionId)) {
+    if (!resolvedSessionId && oauthSessionId) {
+      const session = sessionManager.getSessionByOAuthSessionId(oauthSessionId);
+      if (session) {
+        resolvedSessionId = session.sessionId;
+      }
+    }
+
+    if (!resolvedSessionId || !sessionManager.hasSession(resolvedSessionId)) {
       res.status(400).send('Invalid or missing session ID');
       return;
     }
 
-    const session = sessionManager.getSession(sessionId);
+    const session = sessionManager.getSession(resolvedSessionId);
     if (!session) {
       res.status(400).send('Session not found');
       return;
     }
 
-    await session.transport.handleRequest(req, res);
-    // Session will be cleaned up by transport.onclose
+    sessionManager.deleteSession(resolvedSessionId);
+    res.status(200).send('Session deleted');
   });
 
   // Cleanup: periodically clean up expired OAuth states
@@ -606,177 +640,5 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
     process.on('SIGTERM', shutdown);
     process.on('SIGINT', shutdown);
-  });
-}
-
-/**
- * Session data for backward-compatible non-OAuth mode
- */
-interface SessionDataCompat {
-  transport: StreamableHTTPServerTransport;
-  fergusClient: FergusClient;
-  createdAt: Date;
-  lastAccessedAt: Date;
-}
-
-/**
- * In-memory session storage for non-OAuth mode
- */
-const sessions = new Map<string, SessionDataCompat>();
-
-/**
- * Create and start HTTP transport server (backward compatible, non-OAuth)
- */
-export async function startHttpServer(config: HttpTransportConfig): Promise<void> {
-  if (!config.apiToken) {
-    throw new Error('API token is required for non-OAuth HTTP server. Use startHttpOAuthServer for OAuth mode.');
-  }
-
-  const app = express();
-
-  // Configure CORS
-  app.use(cors({
-    origin: config.allowedOrigins || '*',
-    exposedHeaders: ['Mcp-Session-Id'],
-    allowedHeaders: ['Content-Type', 'mcp-session-id'],
-  }));
-
-  // Parse JSON bodies
-  app.use(express.json());
-
-  /**
-   * Health check endpoint
-   */
-  app.get('/health', (req: Request, res: Response) => {
-    res.json({
-      status: 'healthy',
-      activeSessions: sessions.size,
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  /**
-   * POST /mcp - Handle MCP requests
-   */
-  app.post('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    let transport: StreamableHTTPServerTransport;
-
-    if (sessionId && sessions.has(sessionId)) {
-      // Reuse existing session
-      const session = sessions.get(sessionId)!;
-      transport = session.transport;
-      session.lastAccessedAt = new Date();
-    } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request - create FergusClient and server first
-      const fergusClient = new FergusClient({
-        apiToken: config.apiToken,
-        baseUrl: config.fergusBaseUrl,
-      });
-
-      // Create transport with session initialization callback
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (newSessionId) => {
-          // Store session data
-          sessions.set(newSessionId, {
-            transport,
-            fergusClient,
-            createdAt: new Date(),
-            lastAccessedAt: new Date(),
-          });
-
-          console.error(`Session initialized: ${newSessionId}`);
-        },
-        // DNS rebinding protection
-        enableDnsRebindingProtection: config.enableDnsRebindingProtection ?? true,
-        allowedHosts: config.allowedHosts || ['127.0.0.1', 'localhost', `localhost:${config.port}`, `127.0.0.1:${config.port}`],
-        allowedOrigins: config.allowedOrigins || [],
-      });
-
-      // Clean up on transport close
-      transport.onclose = () => {
-        if (transport.sessionId && sessions.has(transport.sessionId)) {
-          console.error(`Session closed: ${transport.sessionId}`);
-          sessions.delete(transport.sessionId);
-        }
-      };
-
-      // Create and connect MCP server
-      const server = createMcpServer(fergusClient);
-      await server.connect(transport);
-    } else {
-      // Invalid request - no session ID and not an initialize request
-      res.status(400).json({
-        jsonrpc: '2.0',
-        error: {
-          code: -32000,
-          message: 'Bad Request: No valid session ID provided or missing initialize request',
-        },
-        id: null,
-      });
-      return;
-    }
-
-    // Handle the request
-    await transport.handleRequest(req, res, req.body);
-  });
-
-  /**
-   * GET /mcp - Handle SSE notifications
-   */
-  app.get('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    if (!sessionId || !sessions.has(sessionId)) {
-      res.status(400).send('Invalid or missing session ID');
-      return;
-    }
-
-    const session = sessions.get(sessionId)!;
-    session.lastAccessedAt = new Date();
-
-    await session.transport.handleRequest(req, res);
-  });
-
-  /**
-   * DELETE /mcp - Handle session termination
-   */
-  app.delete('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    if (!sessionId || !sessions.has(sessionId)) {
-      res.status(400).send('Invalid or missing session ID');
-      return;
-    }
-
-    const session = sessions.get(sessionId)!;
-    await session.transport.handleRequest(req, res);
-
-    // Session will be cleaned up by transport.onclose
-  });
-
-  /**
-   * Session cleanup - remove inactive sessions after 1 hour
-   */
-  const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
-  setInterval(() => {
-    const now = new Date();
-    for (const [sessionId, session] of sessions.entries()) {
-      const inactiveMs = now.getTime() - session.lastAccessedAt.getTime();
-      if (inactiveMs > SESSION_TIMEOUT_MS) {
-        console.error(`Cleaning up inactive session: ${sessionId}`);
-        session.transport.close();
-        sessions.delete(sessionId);
-      }
-    }
-  }, 15 * 60 * 1000); // Check every 15 minutes
-
-  // Start server
-  return new Promise((resolve) => {
-    app.listen(config.port, config.host, () => {
-      console.error(`MCP HTTP server listening on http://${config.host}:${config.port}`);
-      resolve();
-    });
   });
 }
