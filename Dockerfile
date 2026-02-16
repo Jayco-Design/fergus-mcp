@@ -1,4 +1,4 @@
-FROM node:22-slim
+FROM node:22-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
@@ -14,6 +14,6 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 RUN pnpm run build
 RUN pnpm prune --prod --ignore-scripts
 
-EXPOSE 3100
+EXPOSE 8080
 
 CMD ["pnpm", "run", "start:http"]
