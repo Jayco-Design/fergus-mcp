@@ -30,6 +30,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: linux/arm64,linux/amd64
           push: true
           tags: |
             fergusapp/mcp:${{ github.event.release.tag_name }}
