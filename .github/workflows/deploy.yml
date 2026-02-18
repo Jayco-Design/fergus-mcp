@@ -35,5 +35,13 @@ jobs:
           tags: |
             fergusapp/mcp:${{ github.event.release.tag_name }}
             fergusapp/mcp:latest
+          labels: |
+            org.opencontainers.image.description=Fergus MCP Server
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=https://github.com/fergusapp/fergus-mcp
+            org.opencontainers.image.title=Fergus MCP Server
+            org.opencontainers.image.url=https://github.com/fergusapp/fergus-mcp
+            org.opencontainers.image.vendor=Fergus
+            org.opencontainers.image.version=${{ github.event.release.tag_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
