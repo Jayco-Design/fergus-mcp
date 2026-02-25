@@ -247,7 +247,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       const sessionId = randomUUID();
 
       // Store Cognito tokens
-      tokenManager.storeTokens(sessionId, tokens);
+      await tokenManager.storeTokens(sessionId, tokens);
 
       console.error('[OAuth] ✅ Stored tokens in MCP session');
 
