@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { resolveJobId } from './job-resolver.js';
 
 export const manageJobsToolDefinition = {
   name: 'manage-jobs',
@@ -18,7 +19,7 @@ export const manageJobsToolDefinition = {
       },
       jobId: {
         type: 'string',
-        description: 'Job ID (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase)',
+        description: 'Job number or ID. Accepts user-friendly refs like "Job-500" or "500" as well as API IDs. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase)',
       },
       jobPhaseId: {
         type: 'string',
@@ -129,11 +130,12 @@ async function handleGetJob(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const jobId = args.jobId;
-  if (!jobId) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
     throw new Error('jobId is required for get action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const job = await fergusClient.get(`/jobs/${jobId}`);
   return {
     content: [
@@ -215,11 +217,13 @@ async function handleUpdateJob(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, title, description, customerId, siteId, customerReference } = args;
+  const { jobId: jobRef, title, description, customerId, siteId, customerReference } = args;
 
-  if (!jobId) {
+  if (!jobRef) {
     throw new Error('jobId is required for update action');
   }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   const requestBody: any = {};
   if (title !== undefined) requestBody.title = title;
@@ -249,11 +253,12 @@ async function handleFinalizeJob(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId } = args;
-  if (!jobId) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
     throw new Error('jobId is required for finalize action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const job = await fergusClient.put(`/jobs/${jobId}/finalise`, {});
   return {
     content: [
@@ -271,11 +276,12 @@ async function handleGetFinancialSummary(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId } = args;
-  if (!jobId) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
     throw new Error('jobId is required for get-financial-summary action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const summary = await fergusClient.get(`/jobs/${jobId}/financial-summary`);
   return {
     content: [
@@ -293,11 +299,12 @@ async function handleListPhases(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId } = args;
-  if (!jobId) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
     throw new Error('jobId is required for list-phases action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const phases = await fergusClient.get(`/jobs/${jobId}/phases`);
   return {
     content: [
@@ -315,11 +322,12 @@ async function handleGetPhase(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, jobPhaseId } = args;
-  if (!jobId || !jobPhaseId) {
+  const { jobId: jobRef, jobPhaseId } = args;
+  if (!jobRef || !jobPhaseId) {
     throw new Error('jobId and jobPhaseId are required for get-phase action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const phase = await fergusClient.get(`/jobs/${jobId}/phases/${jobPhaseId}`);
   return {
     content: [
@@ -337,10 +345,12 @@ async function handleCreatePhase(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, phaseName, phaseDescription } = args;
-  if (!jobId || !phaseName) {
+  const { jobId: jobRef, phaseName, phaseDescription } = args;
+  if (!jobRef || !phaseName) {
     throw new Error('jobId and phaseName are required for create-phase action');
   }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   const requestBody: any = { name: phaseName };
   if (phaseDescription) requestBody.description = phaseDescription;

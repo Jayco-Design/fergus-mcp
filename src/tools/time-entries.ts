@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { resolveJobId, extractJobNo } from './job-resolver.js';
 
 export const manageTimeEntriesToolDefinition = {
   name: 'manage-time-entries',
@@ -28,9 +29,9 @@ export const manageTimeEntriesToolDefinition = {
         type: 'string',
         description: 'Filter by user ID (for: list)',
       },
-      filterJobNo: {
+      filterJob: {
         type: 'string',
-        description: 'Filter by job number (for: list)',
+        description: 'Filter by job number or ID. Accepts "Job-500", "500", or API IDs. Automatically resolves to the correct internal ID. (for: list)',
       },
       filterDateFrom: {
         type: 'string',
@@ -110,7 +111,7 @@ async function handleListTimeEntries(
 ) {
   const {
     filterUserId,
-    filterJobNo,
+    filterJob,
     filterDateFrom,
     filterDateTo,
     filterSearchText,
@@ -123,8 +124,14 @@ async function handleListTimeEntries(
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
+
+  // Resolve job reference to API ID for filtering
+  if (filterJob) {
+    const { id: jobId } = await resolveJobId(fergusClient, String(filterJob));
+    params.append('filterJobId', jobId.toString());
+  }
+
   if (filterUserId) params.append('filterUserId', filterUserId);
-  if (filterJobNo) params.append('filterJobNo', filterJobNo);
   if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
   if (filterDateTo) params.append('filterDateTo', filterDateTo);
   if (filterSearchText) params.append('filterSearchText', filterSearchText);

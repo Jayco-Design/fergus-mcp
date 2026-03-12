@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { resolveJobId } from './job-resolver.js';
 
 export const manageQuotesToolDefinition = {
   name: 'manage-quotes',
@@ -18,7 +19,7 @@ export const manageQuotesToolDefinition = {
       },
       jobId: {
         type: 'string',
-        description: 'Job ID (required for: list, get-detail, create, update, update-version, get-totals, accept)',
+        description: 'Job number or ID. Accepts "Job-500", "500", or API IDs. (required for: list, get-detail, create, update, update-version, get-totals, accept)',
       },
       quoteId: {
         type: 'string',
@@ -169,11 +170,12 @@ async function handleGetQuoteDetail(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, quoteId } = args;
-  if (!jobId || !quoteId) {
+  const { jobId: jobRef, quoteId } = args;
+  if (!jobRef || !quoteId) {
     throw new Error('jobId and quoteId are required for get-detail action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const quoteDetail = await fergusClient.get(`/jobs/${jobId}/quotes/${quoteId}`);
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(quoteDetail, null, 2) }],
@@ -186,10 +188,12 @@ async function handleListQuotes(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, filterStatus, createdAfter, modifiedAfter, pageSize = 50, sortField, sortOrder, pageCursor } = args;
-  if (!jobId) {
+  const { jobId: jobRef, filterStatus, createdAfter, modifiedAfter, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  if (!jobRef) {
     throw new Error('jobId is required for list action. Use list-standalone for standalone quotes.');
   }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
@@ -213,10 +217,12 @@ async function handleCreateQuote(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, title, description, dueDays, sections } = args;
-  if (!jobId || !title || !dueDays || !sections) {
+  const { jobId: jobRef, title, description, dueDays, sections } = args;
+  if (!jobRef || !title || !dueDays || !sections) {
     throw new Error('jobId, title, dueDays, and sections are required for create action');
   }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   if (dueDays < 7 || dueDays > 180) {
     throw new Error('dueDays must be between 7 and 180');
@@ -237,10 +243,12 @@ async function handleUpdateQuote(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, quoteId, sections } = args;
-  if (!jobId || !quoteId || !sections) {
+  const { jobId: jobRef, quoteId, sections } = args;
+  if (!jobRef || !quoteId || !sections) {
     throw new Error('jobId, quoteId, and sections are required for update action');
   }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   try {
     // Fetch existing quote to preserve title and description (API workaround)
@@ -272,10 +280,12 @@ async function handleUpdateQuoteVersion(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, versionNumber, sections } = args;
-  if (!jobId || !versionNumber || !sections) {
+  const { jobId: jobRef, versionNumber, sections } = args;
+  if (!jobRef || !versionNumber || !sections) {
     throw new Error('jobId, versionNumber, and sections are required for update-version action');
   }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   try {
     const quotesResponse: any = await fergusClient.get(`/jobs/${jobId}/quotes`);
@@ -312,11 +322,12 @@ async function handleGetQuoteTotals(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, quoteId } = args;
-  if (!jobId || !quoteId) {
+  const { jobId: jobRef, quoteId } = args;
+  if (!jobRef || !quoteId) {
     throw new Error('jobId and quoteId are required for get-totals action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const totals = await fergusClient.get(`/jobs/${jobId}/quotes/${quoteId}/totals`);
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(totals, null, 2) }],
@@ -329,11 +340,12 @@ async function handleAcceptQuote(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId, quoteId } = args;
-  if (!jobId || !quoteId) {
+  const { jobId: jobRef, quoteId } = args;
+  if (!jobRef || !quoteId) {
     throw new Error('jobId and quoteId are required for accept action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const result = await fergusClient.post(`/jobs/${jobId}/quotes/${quoteId}/accept`, {});
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
