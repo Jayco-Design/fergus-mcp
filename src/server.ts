@@ -13,71 +13,22 @@ import {
 import { FergusClient } from './fergus-client.js';
 
 // Tool handlers - consolidated imports
-import {
-  getCustomerToolDefinition,
-  listCustomersToolDefinition,
-  createCustomerToolDefinition,
-  updateCustomerToolDefinition,
-  handleGetCustomer,
-  handleListCustomers,
-  handleCreateCustomer,
-  handleUpdateCustomer,
-} from './tools/customers.js';
-
-import {
-  getSiteToolDefinition,
-  listSitesToolDefinition,
-  createSiteToolDefinition,
-  updateSiteToolDefinition,
-  handleGetSite,
-  handleListSites,
-  handleCreateSite,
-  handleUpdateSite,
-} from './tools/sites.js';
-
-import {
-  getJobToolDefinition,
-  listJobsToolDefinition,
-  createJobToolDefinition,
-  updateJobToolDefinition,
-  finalizeJobToolDefinition,
-  handleGetJob,
-  handleListJobs,
-  handleCreateJob,
-  handleUpdateJob,
-  handleFinalizeJob,
-} from './tools/jobs.js';
-
-import {
-  getQuoteToolDefinition,
-  getQuoteDetailToolDefinition,
-  listQuotesToolDefinition,
-  createQuoteToolDefinition,
-  updateQuoteToolDefinition,
-  updateQuoteVersionToolDefinition,
-  handleGetQuote,
-  handleGetQuoteDetail,
-  handleListQuotes,
-  handleCreateQuote,
-  handleUpdateQuote,
-  handleUpdateQuoteVersion,
-} from './tools/quotes.js';
-
-import {
-  getUserToolDefinition,
-  listUsersToolDefinition,
-  updateUserToolDefinition,
-  handleGetUser,
-  handleListUsers,
-  handleUpdateUser,
-} from './tools/users.js';
-
-import {
-  getTimeEntryToolDefinition,
-  listTimeEntriesToolDefinition,
-  handleGetTimeEntry,
-  handleListTimeEntries,
-} from './tools/time-entries.js';
+import { manageJobsToolDefinition, handleManageJobs } from './tools/jobs.js';
+import { manageQuotesToolDefinition, handleManageQuotes } from './tools/quotes.js';
+import { manageCustomersToolDefinition, handleManageCustomers } from './tools/customers.js';
+import { manageSitesToolDefinition, handleManageSites } from './tools/sites.js';
+import { manageUsersToolDefinition, handleManageUsers } from './tools/users.js';
+import { manageTimeEntriesToolDefinition, handleManageTimeEntries } from './tools/time-entries.js';
+import { manageContactsToolDefinition, handleManageContacts } from './tools/contacts.js';
+import { manageInvoicesToolDefinition, handleManageInvoices } from './tools/invoices.js';
+import { manageEnquiriesToolDefinition, handleManageEnquiries } from './tools/enquiries.js';
+import { managePricebooksToolDefinition, handleManagePricebooks } from './tools/pricebooks.js';
+import { manageStockToolDefinition, handleManageStock } from './tools/stock.js';
+import { manageCalendarEventsToolDefinition, handleManageCalendarEvents } from './tools/calendar-events.js';
+import { manageNotesToolDefinition, handleManageNotes } from './tools/notes.js';
+import { managePricingTiersToolDefinition, handleManagePricingTiers } from './tools/pricing-tiers.js';
+import { manageFavouritesToolDefinition, handleManageFavourites } from './tools/favourites.js';
+import { getCompanyInfoToolDefinition, handleGetCompanyInfo } from './tools/company.js';
 
 // Prompt handlers
 import { jobCreationAssistantPromptDefinition, getJobCreationAssistantPrompt } from './prompts/job-creation-assistant.js';
@@ -117,30 +68,22 @@ export function createMcpServer(fergusClient: FergusClient): Server {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
-        getJobToolDefinition,
-        listJobsToolDefinition,
-        getTimeEntryToolDefinition,
-        listTimeEntriesToolDefinition,
-        getQuoteToolDefinition,
-        getQuoteDetailToolDefinition,
-        listQuotesToolDefinition,
-        getCustomerToolDefinition,
-        listCustomersToolDefinition,
-        getSiteToolDefinition,
-        listSitesToolDefinition,
-        getUserToolDefinition,
-        listUsersToolDefinition,
-        createJobToolDefinition,
-        updateJobToolDefinition,
-        finalizeJobToolDefinition,
-        createQuoteToolDefinition,
-        updateQuoteToolDefinition,
-        updateQuoteVersionToolDefinition,
-        createCustomerToolDefinition,
-        updateCustomerToolDefinition,
-        createSiteToolDefinition,
-        updateSiteToolDefinition,
-        updateUserToolDefinition,
+        manageJobsToolDefinition,
+        manageQuotesToolDefinition,
+        manageCustomersToolDefinition,
+        manageSitesToolDefinition,
+        manageContactsToolDefinition,
+        manageUsersToolDefinition,
+        manageInvoicesToolDefinition,
+        manageEnquiriesToolDefinition,
+        manageTimeEntriesToolDefinition,
+        managePricebooksToolDefinition,
+        manageStockToolDefinition,
+        manageCalendarEventsToolDefinition,
+        manageNotesToolDefinition,
+        managePricingTiersToolDefinition,
+        manageFavouritesToolDefinition,
+        getCompanyInfoToolDefinition,
       ],
     };
   });
@@ -207,177 +150,53 @@ export function createMcpServer(fergusClient: FergusClient): Server {
 
     try {
       switch (name) {
-        case 'get-job':
-          return await handleGetJob(fergusClient, args as { jobId?: string });
+        case 'manage-jobs':
+          return await handleManageJobs(fergusClient, args as Record<string, any>);
 
-        case 'list-jobs':
-          return await handleListJobs(fergusClient, args as { status?: string; limit?: number; sortField?: string; sortOrder?: string });
+        case 'manage-quotes':
+          return await handleManageQuotes(fergusClient, args as Record<string, any>);
 
-        case 'get-time-entry':
-          return await handleGetTimeEntry(fergusClient, args as { timeEntryId: string });
+        case 'manage-customers':
+          return await handleManageCustomers(fergusClient, args as Record<string, any>, _meta);
 
-        case 'list-time-entries':
-          return await handleListTimeEntries(fergusClient, args as {
-            filterUserId?: string;
-            filterJobNo?: string;
-            filterDateFrom?: string;
-            filterDateTo?: string;
-            filterSearchText?: string;
-            filterLockedOnly?: boolean;
-            pageSize?: number;
-            sortField?: string;
-            sortOrder?: string;
-            pageCursor?: string;
-          });
+        case 'manage-sites':
+          return await handleManageSites(fergusClient, args as Record<string, any>);
 
-        case 'get-quote':
-          return await handleGetQuote(fergusClient, args as { quoteId: string });
+        case 'manage-contacts':
+          return await handleManageContacts(fergusClient, args as Record<string, any>);
 
-        case 'get-quote-detail':
-          return await handleGetQuoteDetail(fergusClient, args as { jobId: string; quoteId: string });
+        case 'manage-users':
+          return await handleManageUsers(fergusClient, args as Record<string, any>, _meta);
 
-        case 'list-quotes':
-          return await handleListQuotes(fergusClient, args as {
-            filterStatus?: string;
-            createdAfter?: string;
-            modifiedAfter?: string;
-            pageSize?: number;
-            sortField?: string;
-            sortOrder?: string;
-            pageCursor?: string;
-          });
+        case 'manage-invoices':
+          return await handleManageInvoices(fergusClient, args as Record<string, any>);
 
-        case 'get-customer':
-          return await handleGetCustomer(fergusClient, args as { customerId: string }, _meta);
+        case 'manage-enquiries':
+          return await handleManageEnquiries(fergusClient, args as Record<string, any>);
 
-        case 'list-customers':
-          return await handleListCustomers(fergusClient, args as {
-            filterSearchText?: string;
-            pageSize?: number;
-            sortField?: string;
-            sortOrder?: string;
-            pageCursor?: string;
-          }, _meta);
+        case 'manage-time-entries':
+          return await handleManageTimeEntries(fergusClient, args as Record<string, any>);
 
-        case 'get-site':
-          return await handleGetSite(fergusClient, args as { siteId: string });
+        case 'manage-pricebooks':
+          return await handleManagePricebooks(fergusClient, args as Record<string, any>);
 
-        case 'list-sites':
-          return await handleListSites(fergusClient, args as {
-            filterSearchText?: string;
-            filterSiteName?: string;
-            filterAddressCity?: string;
-            filterAddressPostalCode?: string;
-            pageSize?: number;
-            sortField?: string;
-            sortOrder?: string;
-            pageCursor?: string;
-          });
+        case 'manage-stock':
+          return await handleManageStock(fergusClient, args as Record<string, any>);
 
-        case 'get-user':
-          return await handleGetUser(fergusClient, args as { userId: string });
+        case 'manage-calendar-events':
+          return await handleManageCalendarEvents(fergusClient, args as Record<string, any>);
 
-        case 'list-users':
-          return await handleListUsers(fergusClient, args as {
-            filterSearchText?: string;
-            pageSize?: number;
-            sortField?: string;
-            sortOrder?: string;
-            filterUserType?: string;
-            filterStatus?: string;
-          }, _meta);
+        case 'manage-notes':
+          return await handleManageNotes(fergusClient, args as Record<string, any>);
 
-        case 'create-job':
-          return await handleCreateJob(fergusClient, args as {
-            jobType: 'Quote' | 'Estimate' | 'Charge Up';
-            title: string;
-            description?: string;
-            customerId?: number;
-            siteId?: number;
-            customerReference?: string;
-            isDraft?: boolean;
-          });
+        case 'manage-pricing-tiers':
+          return await handleManagePricingTiers(fergusClient, args as Record<string, any>);
 
-        case 'update-job':
-          return await handleUpdateJob(fergusClient, args as {
-            jobId: number;
-            title?: string;
-            description?: string;
-            customerId?: number;
-            siteId?: number;
-            customerReference?: string;
-          });
+        case 'manage-favourites':
+          return await handleManageFavourites(fergusClient, args as Record<string, any>);
 
-        case 'finalize-job':
-          return await handleFinalizeJob(fergusClient, args as { jobId: number });
-
-        case 'create-quote':
-          return await handleCreateQuote(fergusClient, args as {
-            jobId: number;
-            title: string;
-            description?: string;
-            dueDays: number;
-            sections: any[];
-          });
-
-        case 'update-quote':
-          return await handleUpdateQuote(fergusClient, args as {
-            jobId: number;
-            quoteId: number;
-            sections: any[];
-          });
-
-        case 'update-quote-version':
-          return await handleUpdateQuoteVersion(fergusClient, args as {
-            jobId: number;
-            versionNumber: number;
-            sections: any[];
-          });
-
-        case 'create-customer':
-          return await handleCreateCustomer(fergusClient, args as {
-            customerFullName: string;
-            mainContact: any;
-            physicalAddress?: any;
-            postalAddress?: any;
-          });
-
-        case 'update-customer':
-          return await handleUpdateCustomer(fergusClient, args as {
-            customerId: number;
-            customerFullName: string;
-            mainContact: any;
-            physicalAddress?: any;
-            postalAddress?: any;
-          });
-
-        case 'create-site':
-          return await handleCreateSite(fergusClient, args as {
-            name?: string;
-            defaultContact: any;
-            billingContact?: any;
-            siteAddress: any;
-            postalAddress?: any;
-          });
-
-        case 'update-site':
-          return await handleUpdateSite(fergusClient, args as {
-            siteId: number;
-            name?: string;
-            siteAddress: any;
-            postalAddress?: any;
-          });
-
-        case 'update-user':
-          return await handleUpdateUser(fergusClient, args as {
-            userId: number;
-            firstName?: string;
-            lastName?: string;
-            address?: any;
-            payRate?: number;
-            chargeOutRate?: number;
-            contactItems?: any[];
-          });
+        case 'get-company-info':
+          return await handleGetCompanyInfo(fergusClient);
 
         default:
           throw new Error(`Unknown tool: ${name}`);

@@ -1,6 +1,6 @@
 /**
- * Customer Tools
- * All customer-related operations (get, list, create, update)
+ * Customer Tools (consolidated)
+ * manage-customers: get, list, create, update
  */
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -8,28 +8,72 @@ import { FergusClient } from '../fergus-client.js';
 import { formatResponse, isChatGPT } from '../utils/format-response.js';
 import { addressSchema, contactSchema } from './schemas.js';
 
-// ===== GET CUSTOMER =====
-
-export const getCustomerToolDefinition = {
-  name: 'get-customer',
-  description: 'Get details of a specific customer by ID',
-  annotations: {
-    readOnlyHint: true
-  },
+export const manageCustomersToolDefinition = {
+  name: 'manage-customers',
+  description: 'Manage customers. Actions: get, list, create, update',
   _meta: {
     'openai/outputTemplate': 'ui://customers/customer-detail.html',
-    'openai/toolInvocation/invoking': 'Loading customer details...',
-    'openai/toolInvocation/invoked': 'Customer details loaded'
+    'openai/toolInvocation/invoking': 'Loading customer data...',
+    'openai/toolInvocation/invoked': 'Customer data loaded'
   },
   inputSchema: {
     type: 'object',
     properties: {
+      action: {
+        type: 'string',
+        enum: ['get', 'list', 'create', 'update'],
+        description: 'The action to perform',
+      },
       customerId: {
         type: 'string',
-        description: 'The ID of the customer to retrieve',
+        description: 'Customer ID (required for: get, update)',
+      },
+      // list params
+      filterSearchText: {
+        type: 'string',
+        description: 'Search text to filter customers (for: list)',
+      },
+      pageSize: {
+        type: 'number',
+        description: 'Max results per page (for: list, default: 10)',
+        default: 10,
+      },
+      sortField: {
+        type: 'string',
+        description: 'Field to sort by (for: list, default: createdAt)',
+        default: 'createdAt',
+      },
+      sortOrder: {
+        type: 'string',
+        description: 'Sort order: asc or desc (for: list)',
+        enum: ['asc', 'desc'],
+        default: 'asc',
+      },
+      pageCursor: {
+        type: 'string',
+        description: 'Pagination cursor (for: list)',
+        default: '0',
+      },
+      // create/update params
+      customerFullName: {
+        type: 'string',
+        description: 'Full name of the customer (required for: create, update)',
+      },
+      mainContact: {
+        ...contactSchema,
+        description: 'Main contact information (required for: create, update)',
+        required: ['firstName'],
+      },
+      physicalAddress: {
+        ...addressSchema,
+        description: 'Physical address (for: create, update)',
+      },
+      postalAddress: {
+        ...addressSchema,
+        description: 'Postal address (for: create, update)',
       },
     },
-    required: ['customerId'],
+    required: ['action'],
   },
   outputSchema: {
     type: 'object',
@@ -42,127 +86,11 @@ export const getCustomerToolDefinition = {
           customerFullName: { type: 'string' },
           email: { type: ['string', 'null'] },
           phone: { type: ['string', 'null'] },
-          mainContact: {
-            type: ['object', 'null'],
-            properties: {
-              name: { type: 'string' },
-              email: { type: 'string' },
-              phone: { type: 'string' },
-              position: { type: 'string' },
-            },
-          },
-          physicalAddress: {
-            type: ['object', 'null'],
-            properties: {
-              line1: { type: 'string' },
-              line2: { type: 'string' },
-              city: { type: 'string' },
-              state: { type: 'string' },
-              postalCode: { type: 'string' },
-              country: { type: 'string' },
-            },
-          },
-          postalAddress: {
-            type: ['object', 'null'],
-            properties: {
-              line1: { type: 'string' },
-              line2: { type: 'string' },
-              city: { type: 'string' },
-              state: { type: 'string' },
-              postalCode: { type: 'string' },
-              country: { type: 'string' },
-            },
-          },
+          mainContact: { type: ['object', 'null'] },
+          physicalAddress: { type: ['object', 'null'] },
+          postalAddress: { type: ['object', 'null'] },
         },
       },
-    },
-  },
-};
-
-export async function handleGetCustomer(
-  fergusClient: FergusClient,
-  args: { customerId: string },
-  meta?: Record<string, any>
-): Promise<CallToolResult> {
-  // Log client detection
-  const isChatGPTClient = isChatGPT(meta);
-  console.log('[get-customer] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude', meta?.['openai/userAgent'] || 'unknown');
-
-  const { customerId } = args;
-
-  if (!customerId) {
-    throw new Error('customerId is required');
-  }
-
-  const customer = await fergusClient.get(`/customers/${customerId}`) as any;
-
-  // Create structured customer data
-  const structuredCustomer = {
-    id: customer.id || customer.customerId,
-    name: customer.customerFullName || customer.name,
-    email: customer.mainContact?.email || customer.email,
-    phone: customer.mainContact?.phone || customer.phone,
-    mainContact: customer.mainContact,
-    physicalAddress: customer.physicalAddress,
-    postalAddress: customer.postalAddress,
-    customerFullName: customer.customerFullName,
-  };
-
-  // Build structured content
-  const structuredContent = {
-    customer: structuredCustomer,
-  };
-
-  // Format response based on client type
-  return formatResponse(structuredContent, meta);
-}
-
-// ===== LIST CUSTOMERS =====
-
-export const listCustomersToolDefinition = {
-  name: 'list-customers',
-  description: 'Display an interactive visual list of customers with optional search filtering. Returns a widget with customer cards.',
-  annotations: {
-    readOnlyHint: true
-  },
-  _meta: {
-    'openai/outputTemplate': 'ui://customers/list-customers.html',
-    'openai/toolInvocation/invoking': 'Loading customers...',
-    'openai/toolInvocation/invoked': 'Got customers'
-  },
-  inputSchema: {
-    type: 'object',
-    properties: {
-      filterSearchText: {
-        type: 'string',
-        description: 'Search text to filter customers',
-      },
-      pageSize: {
-        type: 'number',
-        description: 'Maximum number of customers to return per page',
-        default: 10,
-      },
-      sortField: {
-        type: 'string',
-        description: 'Field to sort by',
-        default: 'createdAt',
-      },
-      sortOrder: {
-        type: 'string',
-        description: 'Sort order: asc or desc',
-        enum: ['asc', 'desc'],
-        default: 'asc',
-      },
-      pageCursor: {
-        type: 'string',
-        description: 'Pagination cursor for next page',
-        default: '0',
-      },
-    },
-  },
-  outputSchema: {
-    type: 'object',
-    properties: {
       customers: {
         type: 'array',
         items: {
@@ -172,15 +100,6 @@ export const listCustomersToolDefinition = {
             name: { type: 'string' },
             email: { type: ['string', 'null'] },
             phone: { type: ['string', 'null'] },
-            address: {
-              type: ['object', 'null'],
-              properties: {
-                line1: { type: 'string' },
-                city: { type: 'string' },
-                postalCode: { type: 'string' },
-                country: { type: 'string' },
-              },
-            },
           },
         },
       },
@@ -196,20 +115,65 @@ export const listCustomersToolDefinition = {
   },
 };
 
-export async function handleListCustomers(
+export async function handleManageCustomers(
   fergusClient: FergusClient,
-  args: {
-    filterSearchText?: string;
-    pageSize?: number;
-    sortField?: string;
-    sortOrder?: string;
-    pageCursor?: string;
-  },
+  args: Record<string, any>,
   meta?: Record<string, any>
-) {
-  // Log client detection
+): Promise<CallToolResult> {
+  switch (args.action) {
+    case 'get':
+      return handleGetCustomer(fergusClient, args, meta);
+    case 'list':
+      return handleListCustomers(fergusClient, args, meta);
+    case 'create':
+      return handleCreateCustomer(fergusClient, args);
+    case 'update':
+      return handleUpdateCustomer(fergusClient, args);
+    default:
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update`);
+  }
+}
+
+// ===== GET CUSTOMER =====
+
+async function handleGetCustomer(
+  fergusClient: FergusClient,
+  args: Record<string, any>,
+  meta?: Record<string, any>
+): Promise<CallToolResult> {
   const isChatGPTClient = isChatGPT(meta);
-  console.log('[list-customers] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude', meta?.['openai/userAgent'] || 'unknown');
+  console.log('[manage-customers:get] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude');
+
+  const { customerId } = args;
+  if (!customerId) {
+    throw new Error('customerId is required for get action');
+  }
+
+  const customer = await fergusClient.get(`/customers/${customerId}`) as any;
+
+  const structuredCustomer = {
+    id: customer.id || customer.customerId,
+    name: customer.customerFullName || customer.name,
+    email: customer.mainContact?.email || customer.email,
+    phone: customer.mainContact?.phone || customer.phone,
+    mainContact: customer.mainContact,
+    physicalAddress: customer.physicalAddress,
+    postalAddress: customer.postalAddress,
+    customerFullName: customer.customerFullName,
+  };
+
+  return formatResponse({ customer: structuredCustomer }, meta);
+}
+
+// ===== LIST CUSTOMERS =====
+
+async function handleListCustomers(
+  fergusClient: FergusClient,
+  args: Record<string, any>,
+  meta?: Record<string, any>
+): Promise<CallToolResult> {
+  const isChatGPTClient = isChatGPT(meta);
+  console.log('[manage-customers:list] Client detected:', isChatGPTClient ? 'ChatGPT' : 'Claude');
 
   const {
     filterSearchText,
@@ -217,27 +181,21 @@ export async function handleListCustomers(
     sortField = 'createdAt',
     sortOrder = 'asc',
     pageCursor = '0',
-  } = args || {};
+  } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   params.append('sortField', sortField);
   params.append('sortOrder', sortOrder);
   params.append('pageCursor', pageCursor);
-
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
 
-  const endpoint = `/customers?${params.toString()}`;
-  const response = await fergusClient.get(endpoint) as any;
-
-  // Extract customers array from response
+  const response = await fergusClient.get(`/customers?${params.toString()}`) as any;
   const customers = Array.isArray(response) ? response : (response.data || response.customers || []);
   const totalCount = response.total || response.totalCount || customers.length;
   const nextCursor = response.nextCursor || response.pageCursor || null;
 
-  // Structure the data for better ChatGPT consumption
   const structuredCustomers = customers.map((customer: any) => {
-    // Extract email and phone from mainContact.contactItems
     const contactItems = customer.mainContact?.contactItems || [];
     const emailItem = contactItems.find((c: any) => c.contactType === 'email');
     const phoneItem = contactItems.find((c: any) => c.contactType === 'phone' || c.contactType === 'mobile');
@@ -259,171 +217,50 @@ export async function handleListCustomers(
     };
   });
 
-  // Build structured content
-  const structuredContent = {
+  return formatResponse({
     customers: structuredCustomers,
-    pagination: {
-      count: customers.length,
-      total: totalCount,
-      nextCursor,
-    },
-  };
-
-  // Format response based on client type
-  return formatResponse(structuredContent, meta);
+    pagination: { count: customers.length, total: totalCount, nextCursor },
+  }, meta);
 }
 
 // ===== CREATE CUSTOMER =====
 
-export const createCustomerToolDefinition = {
-  name: 'create-customer',
-  description: 'Create a new customer with required customerFullName and mainContact information.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      customerFullName: {
-        type: 'string',
-        description: 'Full name of the customer (must not be empty)',
-      },
-      mainContact: {
-        ...contactSchema,
-        description: 'Main contact information for the customer',
-        required: ['firstName'],
-      },
-      physicalAddress: {
-        ...addressSchema,
-        description: 'Physical address (optional)',
-      },
-      postalAddress: {
-        ...addressSchema,
-        description: 'Postal address (optional, same structure as physicalAddress)',
-      },
-    },
-    required: ['customerFullName', 'mainContact'],
-  },
-};
-
-export async function handleCreateCustomer(
+async function handleCreateCustomer(
   fergusClient: FergusClient,
-  args: {
-    customerFullName: string;
-    mainContact: {
-      firstName: string;
-      lastName?: string;
-      position?: string;
-      company?: string;
-      contactItems?: Array<{
-        contactType: 'email' | 'phone' | 'mobile' | 'other' | 'fax' | 'website';
-        contactValue: string;
-      }>;
-    };
-    physicalAddress?: any;
-    postalAddress?: any;
-  }
+  args: Record<string, any>
 ) {
   const { customerFullName, mainContact, physicalAddress, postalAddress } = args;
-
-  const requestBody: any = {
-    customerFullName,
-    mainContact,
-  };
-
-  if (physicalAddress) {
-    requestBody.physicalAddress = physicalAddress;
+  if (!customerFullName || !mainContact) {
+    throw new Error('customerFullName and mainContact are required for create action');
   }
 
-  if (postalAddress) {
-    requestBody.postalAddress = postalAddress;
-  }
+  const requestBody: any = { customerFullName, mainContact };
+  if (physicalAddress) requestBody.physicalAddress = physicalAddress;
+  if (postalAddress) requestBody.postalAddress = postalAddress;
 
   const customer = await fergusClient.post('/customers', requestBody);
-
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(customer, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(customer, null, 2) }],
   };
 }
 
 // ===== UPDATE CUSTOMER =====
 
-export const updateCustomerToolDefinition = {
-  name: 'update-customer',
-  description: 'Update an existing customer. Requires customerId, customerFullName, and mainContact.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      customerId: {
-        type: 'number',
-        description: 'The ID of the customer to update',
-      },
-      customerFullName: {
-        type: 'string',
-        description: 'Full name of the customer (must not be empty)',
-      },
-      mainContact: {
-        ...contactSchema,
-        description: 'Main contact information for the customer',
-        required: ['firstName'],
-      },
-      physicalAddress: {
-        ...addressSchema,
-        description: 'Physical address (optional)',
-      },
-      postalAddress: {
-        ...addressSchema,
-        description: 'Postal address (optional, same structure as physicalAddress)',
-      },
-    },
-    required: ['customerId', 'customerFullName', 'mainContact'],
-  },
-};
-
-export async function handleUpdateCustomer(
+async function handleUpdateCustomer(
   fergusClient: FergusClient,
-  args: {
-    customerId: number;
-    customerFullName: string;
-    mainContact: {
-      firstName: string;
-      lastName?: string;
-      position?: string;
-      company?: string;
-      contactItems?: Array<{
-        contactType: 'email' | 'phone' | 'mobile' | 'other' | 'fax' | 'website';
-        contactValue: string;
-      }>;
-    };
-    physicalAddress?: any;
-    postalAddress?: any;
-  }
+  args: Record<string, any>
 ) {
   const { customerId, customerFullName, mainContact, physicalAddress, postalAddress } = args;
-
-  const requestBody: any = {
-    customerFullName,
-    mainContact,
-  };
-
-  if (physicalAddress) {
-    requestBody.physicalAddress = physicalAddress;
+  if (!customerId || !customerFullName || !mainContact) {
+    throw new Error('customerId, customerFullName, and mainContact are required for update action');
   }
 
-  if (postalAddress) {
-    requestBody.postalAddress = postalAddress;
-  }
+  const requestBody: any = { customerFullName, mainContact };
+  if (physicalAddress) requestBody.physicalAddress = physicalAddress;
+  if (postalAddress) requestBody.postalAddress = postalAddress;
 
   const customer = await fergusClient.put(`/customers/${customerId}`, requestBody);
-
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(customer, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(customer, null, 2) }],
   };
 }

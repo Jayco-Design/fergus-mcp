@@ -1,123 +1,112 @@
 /**
- * Time Entry Tools
- * All time entry-related operations (get, list)
+ * Time Entry Tools (consolidated)
+ * manage-time-entries: get, list
  */
 
 import { FergusClient } from '../fergus-client.js';
 
-// ===== GET TIME ENTRY =====
-
-export const getTimeEntryToolDefinition = {
-  name: 'get-time-entry',
-  description: 'Get details of a specific time entry by ID',
+export const manageTimeEntriesToolDefinition = {
+  name: 'manage-time-entries',
+  description: 'Manage time entries. Actions: get, list',
   annotations: {
-    readOnlyHint: true
+    readOnlyHint: true,
   },
   inputSchema: {
     type: 'object',
     properties: {
+      action: {
+        type: 'string',
+        enum: ['get', 'list'],
+        description: 'The action to perform',
+      },
       timeEntryId: {
         type: 'string',
-        description: 'The ID of the time entry to retrieve',
+        description: 'Time entry ID (required for: get)',
+      },
+      // list params
+      filterUserId: {
+        type: 'string',
+        description: 'Filter by user ID (for: list)',
+      },
+      filterJobNo: {
+        type: 'string',
+        description: 'Filter by job number (for: list)',
+      },
+      filterDateFrom: {
+        type: 'string',
+        description: 'Filter by start date YYYY-MM-DD (for: list)',
+      },
+      filterDateTo: {
+        type: 'string',
+        description: 'Filter by end date YYYY-MM-DD (for: list)',
+      },
+      filterSearchText: {
+        type: 'string',
+        description: 'Search text to filter (for: list)',
+      },
+      filterLockedOnly: {
+        type: 'boolean',
+        description: 'Show only locked entries (for: list)',
+      },
+      pageSize: {
+        type: 'number',
+        description: 'Max results per page (for: list, default: 50)',
+        default: 50,
+      },
+      sortField: {
+        type: 'string',
+        description: 'Field to sort by (for: list)',
+      },
+      sortOrder: {
+        type: 'string',
+        description: 'Sort order: asc or desc (for: list)',
+        enum: ['asc', 'desc'],
+      },
+      pageCursor: {
+        type: 'string',
+        description: 'Pagination cursor (for: list)',
       },
     },
-    required: ['timeEntryId'],
+    required: ['action'],
   },
 };
 
-export async function handleGetTimeEntry(
+export async function handleManageTimeEntries(
   fergusClient: FergusClient,
-  args: { timeEntryId: string }
+  args: Record<string, any>
+) {
+  switch (args.action) {
+    case 'get':
+      return handleGetTimeEntry(fergusClient, args);
+    case 'list':
+      return handleListTimeEntries(fergusClient, args);
+    default:
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list`);
+  }
+}
+
+// ===== GET TIME ENTRY =====
+
+async function handleGetTimeEntry(
+  fergusClient: FergusClient,
+  args: Record<string, any>
 ) {
   const { timeEntryId } = args;
-
   if (!timeEntryId) {
-    throw new Error('timeEntryId is required');
+    throw new Error('timeEntryId is required for get action');
   }
 
   const timeEntry = await fergusClient.get(`/timeEntries/${timeEntryId}`);
-
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(timeEntry, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(timeEntry, null, 2) }],
   };
 }
 
 // ===== LIST TIME ENTRIES =====
 
-export const listTimeEntriesToolDefinition = {
-  name: 'list-time-entries',
-  description: 'List time entries with optional filtering by user, job, and date range',
-  annotations: {
-    readOnlyHint: true
-  },
-  inputSchema: {
-    type: 'object',
-    properties: {
-      filterUserId: {
-        type: 'string',
-        description: 'Filter by user ID',
-      },
-      filterJobNo: {
-        type: 'string',
-        description: 'Filter by job number',
-      },
-      filterDateFrom: {
-        type: 'string',
-        description: 'Filter by start date (ISO 8601 format: YYYY-MM-DD)',
-      },
-      filterDateTo: {
-        type: 'string',
-        description: 'Filter by end date (ISO 8601 format: YYYY-MM-DD)',
-      },
-      filterSearchText: {
-        type: 'string',
-        description: 'Search text to filter time entries',
-      },
-      filterLockedOnly: {
-        type: 'boolean',
-        description: 'Filter to show only locked time entries',
-      },
-      pageSize: {
-        type: 'number',
-        description: 'Maximum number of time entries to return per page',
-        default: 50,
-      },
-      sortField: {
-        type: 'string',
-        description: 'Field to sort by',
-      },
-      sortOrder: {
-        type: 'string',
-        description: 'Sort order: asc or desc',
-        enum: ['asc', 'desc'],
-      },
-      pageCursor: {
-        type: 'string',
-        description: 'Pagination cursor for next page',
-      },
-    },
-  },
-};
-
-export async function handleListTimeEntries(
+async function handleListTimeEntries(
   fergusClient: FergusClient,
-  args: {
-    filterUserId?: string;
-    filterJobNo?: string;
-    filterDateFrom?: string;
-    filterDateTo?: string;
-    filterSearchText?: string;
-    filterLockedOnly?: boolean;
-    pageSize?: number;
-    sortField?: string;
-    sortOrder?: string;
-    pageCursor?: string;
-  }
+  args: Record<string, any>
 ) {
   const {
     filterUserId,
@@ -130,11 +119,10 @@ export async function handleListTimeEntries(
     sortField,
     sortOrder,
     pageCursor,
-  } = args || {};
+  } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
-
   if (filterUserId) params.append('filterUserId', filterUserId);
   if (filterJobNo) params.append('filterJobNo', filterJobNo);
   if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
@@ -145,15 +133,8 @@ export async function handleListTimeEntries(
   if (sortOrder) params.append('sortOrder', sortOrder);
   if (pageCursor) params.append('pageCursor', pageCursor);
 
-  const endpoint = `/timeEntries?${params.toString()}`;
-  const timeEntries = await fergusClient.get(endpoint);
-
+  const timeEntries = await fergusClient.get(`/timeEntries?${params.toString()}`);
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(timeEntries, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(timeEntries, null, 2) }],
   };
 }

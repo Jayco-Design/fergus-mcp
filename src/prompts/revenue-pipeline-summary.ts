@@ -40,14 +40,14 @@ export function getRevenuePipelineSummaryPrompt(args: { dateFrom?: string; dateT
           text: `I'll build a revenue pipeline overview ${rangeText}.
 
 ## Workflow
-1. Fetch quotes with \`list-quotes\`:
+1. Fetch standalone quotes with \`manage-quotes\` action \`list-standalone\`:
    - Use \`createdAfter\` / \`modifiedAfter\` filters when dates are supplied.
    - Page through results until you cover the period (watch \`pageCursor\`).
 2. Group quotes by status (Draft, Sent, Accepted, Rejected, etc.) and sum their total amounts. Prefer the \`grandTotal\`/financial fields from the payload.
 3. Identify top opportunities:
    - Highlight the highest-value quotes still in Draft/Sent.
    - Note accepted quotes within range for revenue recognition.
-4. Cross-reference customers/jobs for context by calling \`get-job\` or \`get-customer\` when a quote stands out (> configurable threshold such as \$10k) so you can mention the client and job name in the summary.
+4. Cross-reference customers/jobs for context by calling \`manage-jobs\` with action \`get\` or \`manage-customers\` with action \`get\` when a quote stands out (> configurable threshold such as \$10k) so you can mention the client and job name in the summary.
 5. Surface any quotes approaching expiry (compare due dates vs today) and recommend next actions.
 
 ## Output Expectations
