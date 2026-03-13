@@ -1,5 +1,5 @@
 /**
- * Invoice Tools
+ * Customer Invoice Tools
  * manage-invoices: get, list
  */
 
@@ -7,7 +7,7 @@ import { FergusClient } from '../fergus-client.js';
 
 export const manageInvoicesToolDefinition = {
   name: 'manage-invoices',
-  description: 'Manage invoices. Actions: get, list',
+  description: 'Manage customer invoices. Actions: get, list',
   annotations: {
     readOnlyHint: true,
   },
@@ -23,13 +23,25 @@ export const manageInvoicesToolDefinition = {
         type: 'string',
         description: 'Invoice ID (required for: get)',
       },
-      filterStatus: {
-        type: 'string',
-        description: 'Filter by invoice status (for: list)',
+      customerId: {
+        type: 'number',
+        description: 'Filter by customer ID (for: list)',
       },
-      filterSearchText: {
+      jobId: {
+        type: 'number',
+        description: 'Filter by job ID (for: list)',
+      },
+      invoiceNumber: {
         type: 'string',
-        description: 'Search text to filter invoices (for: list)',
+        description: 'Search by invoice number (for: list)',
+      },
+      dueBefore: {
+        type: 'string',
+        description: 'Filter invoices due before this ISO 8601 datetime (for: list)',
+      },
+      dueAfter: {
+        type: 'string',
+        description: 'Filter invoices due after this ISO 8601 datetime (for: list)',
       },
       pageSize: {
         type: 'number',
@@ -72,21 +84,24 @@ async function handleGetInvoice(fergusClient: FergusClient, args: Record<string,
   const { invoiceId } = args;
   if (!invoiceId) throw new Error('invoiceId is required for get action');
 
-  const invoice = await fergusClient.get(`/invoices/${invoiceId}`);
+  const invoice = await fergusClient.get(`/customerInvoices/${invoiceId}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(invoice, null, 2) }] };
 }
 
 async function handleListInvoices(fergusClient: FergusClient, args: Record<string, any>) {
-  const { filterStatus, filterSearchText, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  const { customerId, jobId, invoiceNumber, dueBefore, dueAfter, pageSize = 50, sortField, sortOrder, pageCursor } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
-  if (filterStatus) params.append('filterStatus', filterStatus);
-  if (filterSearchText) params.append('filterSearchText', filterSearchText);
+  if (customerId !== undefined) params.append('customerId', customerId.toString());
+  if (jobId !== undefined) params.append('jobId', jobId.toString());
+  if (invoiceNumber) params.append('invoiceNumber', invoiceNumber);
+  if (dueBefore) params.append('dueBefore', dueBefore);
+  if (dueAfter) params.append('dueAfter', dueAfter);
   if (sortField) params.append('sortField', sortField);
   if (sortOrder) params.append('sortOrder', sortOrder);
   if (pageCursor) params.append('pageCursor', pageCursor);
 
-  const invoices = await fergusClient.get(`/invoices?${params.toString()}`);
+  const invoices = await fergusClient.get(`/customerInvoices?${params.toString()}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(invoices, null, 2) }] };
 }

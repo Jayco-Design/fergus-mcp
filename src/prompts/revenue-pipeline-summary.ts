@@ -40,7 +40,7 @@ export function getRevenuePipelineSummaryPrompt(args: { dateFrom?: string; dateT
           text: `I'll build a revenue pipeline overview ${rangeText}.
 
 ## Workflow
-1. Fetch standalone quotes with \`manage-quotes\` action \`list-standalone\`:
+1. Fetch quotes across all jobs with \`manage-quotes\` action \`list-all\`:
    - Use \`createdAfter\` / \`modifiedAfter\` filters when dates are supplied.
    - Page through results until you cover the period (watch \`pageCursor\`).
 2. Group quotes by status (Draft, Sent, Accepted, Rejected, etc.) and sum their total amounts. Prefer the \`grandTotal\`/financial fields from the payload.

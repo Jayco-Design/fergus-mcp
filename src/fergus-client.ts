@@ -92,9 +92,21 @@ export class FergusClient {
         );
       }
 
-      // Parse JSON response
-      const data = await response.json();
-      return data as T;
+      if (response.status === 204 || response.status === 205) {
+        return {} as T;
+      }
+
+      const responseText = await response.text();
+      if (!responseText) {
+        return {} as T;
+      }
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (contentType.includes('application/json')) {
+        return JSON.parse(responseText) as T;
+      }
+
+      return responseText as T;
     } catch (error) {
       if (error instanceof FergusAPIError) {
         throw error;

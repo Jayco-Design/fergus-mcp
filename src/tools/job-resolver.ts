@@ -3,10 +3,12 @@
  * Resolves user-facing job references (e.g. "Job-500", "500") to API IDs.
  *
  * Fergus jobs have two identifiers:
- * - jobNo: human-readable number shown in the UI (e.g. "500" displayed as "Job-500")
+ * - jobNo (internal_job_id): human-readable number shown in the UI (e.g. "500" displayed as "Job-500")
  * - id: internal API identifier (e.g. 20701539)
  *
  * Users always refer to jobs by jobNo. This utility resolves jobNo → id.
+ * The jobs API supports filterJobNo (LIKE match on internal_job_id, indexed).
+ * The timeEntries API filterJobNo does exact match on internal_job_id.
  */
 
 import { FergusClient } from '../fergus-client.js';
@@ -41,7 +43,7 @@ export function looksLikeJobNo(input: string): boolean {
 /**
  * Resolve a job reference to an API ID.
  * If the input already looks like an API ID, returns it as-is.
- * Otherwise searches by jobNo and returns the matching API ID.
+ * Otherwise uses filterJobNo (LIKE on internal_job_id) to find exact match.
  */
 export async function resolveJobId(
   fergusClient: FergusClient,
@@ -53,30 +55,19 @@ export async function resolveJobId(
     throw new Error(`Cannot parse job reference: "${jobRef}". Use a job number like "500" or "Job-500".`);
   }
 
-  // If it looks like an API ID already (7+ digits), verify it exists
+  // If it looks like an API ID already (7+ digits), return as-is
   if (!looksLikeJobNo(jobRef)) {
-    const job: any = await fergusClient.get(`/jobs/${jobRef}`);
-    return { id: job.id || parseInt(jobRef), jobNo: job.jobNo || jobRef };
+    return { id: parseInt(jobNo), jobNo: jobNo };
   }
 
-  // Search for the job by number — the API's filterSearchText does substring matching
-  // so we need to fetch results and find the exact match
-  const response: any = await fergusClient.get(`/jobs?pageSize=50&filterSearchText=${jobNo}`);
+  // Use filterJobNo which does LIKE match on internal_job_id (indexed)
+  const response: any = await fergusClient.get(`/jobs?pageSize=10&filterJobNo=${jobNo}`);
   const jobs = response.data || [];
 
-  // Find exact jobNo match
+  // filterJobNo is LIKE-based, so find the exact match
   const match = jobs.find((j: any) => String(j.jobNo) === jobNo);
   if (match) {
     return { id: match.id, jobNo: match.jobNo };
-  }
-
-  // filterSearchText might not match jobNo directly — try fetching more broadly
-  // by listing recent jobs and scanning
-  const broadResponse: any = await fergusClient.get(`/jobs?pageSize=200&sortField=createdAt&sortOrder=desc`);
-  const broadJobs = broadResponse.data || [];
-  const broadMatch = broadJobs.find((j: any) => String(j.jobNo) === jobNo);
-  if (broadMatch) {
-    return { id: broadMatch.id, jobNo: broadMatch.jobNo };
   }
 
   throw new Error(

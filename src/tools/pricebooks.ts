@@ -30,7 +30,20 @@ export const managePricebooksToolDefinition = {
       // list/search params
       searchText: {
         type: 'string',
-        description: 'Search text (required for: search)',
+        description: 'Search text, min 3 chars. Searches name, productCode, supplierSku. (required for: search)',
+      },
+      pricingTierId: {
+        type: 'number',
+        description: 'Pricing tier ID to filter results (for: search). Defaults to the default tier if omitted.',
+      },
+      allSuppliers: {
+        type: 'boolean',
+        description: 'Search all supplier pricebooks (for: search, default: true). Set false to search specific suppliers via supplierIds.',
+      },
+      supplierIds: {
+        type: 'array',
+        items: { type: 'number' },
+        description: 'Array of supplier/pricebook IDs to search (for: search). Only used when allSuppliers is false.',
       },
       pageSize: {
         type: 'number',
@@ -92,7 +105,7 @@ async function handleListPricebookItems(fergusClient: FergusClient, args: Record
   params.append('pageSize', pageSize.toString());
   if (pageCursor) params.append('pageCursor', pageCursor);
 
-  const items = await fergusClient.get(`/pricebooks/${pricebookId}/items?${params.toString()}`);
+  const items = await fergusClient.get(`/pricebooks/${pricebookId}/pricebookItems?${params.toString()}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(items, null, 2) }] };
 }
 
@@ -100,17 +113,23 @@ async function handleGetPricebookItem(fergusClient: FergusClient, args: Record<s
   const { pricebookId, itemId } = args;
   if (!pricebookId || !itemId) throw new Error('pricebookId and itemId are required for get-item action');
 
-  const item = await fergusClient.get(`/pricebooks/${pricebookId}/items/${itemId}`);
+  const item = await fergusClient.get(`/pricebooks/${pricebookId}/pricebookItems/${itemId}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(item, null, 2) }] };
 }
 
 async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<string, any>) {
-  const { searchText, pageSize = 50, pageCursor } = args;
+  const { searchText, pricingTierId, allSuppliers, supplierIds, pageSize = 50, pageCursor } = args;
   if (!searchText) throw new Error('searchText is required for search action');
 
-  const requestBody: any = { searchText, pageSize };
-  if (pageCursor) requestBody.pageCursor = pageCursor;
+  const requestBody: any = { search: searchText };
+  if (pricingTierId !== undefined) requestBody.pricingTierId = pricingTierId;
+  if (allSuppliers !== undefined) requestBody.allSuppliers = allSuppliers;
+  if (supplierIds) requestBody.supplierIds = supplierIds;
 
-  const results = await fergusClient.post('/pricebooks/search', requestBody);
+  const params = new URLSearchParams();
+  params.append('pageSize', pageSize.toString());
+  if (pageCursor) params.append('pageCursor', pageCursor);
+
+  const results = await fergusClient.post(`/pricebooks/search?${params.toString()}`, requestBody);
   return { content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }] };
 }

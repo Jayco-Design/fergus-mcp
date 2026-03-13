@@ -26,11 +26,33 @@ export const manageJobsToolDefinition = {
         description: 'Phase ID (required for: get-phase)',
       },
       // list params
-      status: {
+      filterJobNo: {
+        type: 'string',
+        description: 'Filter by job number e.g. "500" (for: list). Supports partial match.',
+      },
+      filterJobStatus: {
         type: 'string',
         description: 'Filter by job status (for: list)',
+        enum: ['Active', 'Completed', 'Estimate Rejected', 'Estimate Sent', 'Inactive', 'Quote Sent', 'Quote Rejected', 'To Price'],
       },
-      limit: {
+      filterJobType: {
+        type: 'string',
+        description: 'Filter by job type (for: list)',
+        enum: ['Quote', 'Estimate', 'Charge Up'],
+      },
+      filterCustomerId: {
+        type: 'number',
+        description: 'Filter by customer ID (for: list)',
+      },
+      filterSiteId: {
+        type: 'number',
+        description: 'Filter by site ID (for: list)',
+      },
+      filterSearchText: {
+        type: 'string',
+        description: 'Full-text search across job description, customer name, site name, contact names, and job number (for: list)',
+      },
+      pageSize: {
         type: 'number',
         description: 'Maximum number of jobs to return (for: list, default: 50)',
         default: 50,
@@ -89,7 +111,7 @@ export const manageJobsToolDefinition = {
       },
       phaseDescription: {
         type: 'string',
-        description: 'Phase description (for: create-phase)',
+        description: 'Phase description (required for: create-phase)',
       },
     },
     required: ['action'],
@@ -153,17 +175,33 @@ async function handleListJobs(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const limit = args.limit || 50;
-  const sortField = args.sortField || 'createdAt';
-  const sortOrder = args.sortOrder || 'desc';
-  const pageCursor = args.pageCursor || '0';
+  const {
+    filterJobNo,
+    filterJobStatus,
+    filterJobType,
+    filterCustomerId,
+    filterSiteId,
+    filterSearchText,
+    pageSize = 50,
+    sortField = 'createdAt',
+    sortOrder = 'desc',
+    pageCursor = '0',
+  } = args;
 
-  let endpoint = `/jobs?limit=${limit}&sortField=${sortField}&sortOrder=${sortOrder}&pageCursor=${pageCursor}`;
-  if (args.status) {
-    endpoint += `&status=${encodeURIComponent(args.status)}`;
-  }
+  const params = new URLSearchParams();
+  params.append('pageSize', pageSize.toString());
+  params.append('sortField', sortField);
+  params.append('sortOrder', sortOrder);
+  params.append('pageCursor', pageCursor);
 
-  const jobs = await fergusClient.get(endpoint);
+  if (filterJobNo) params.append('filterJobNo', filterJobNo);
+  if (filterJobStatus) params.append('filterJobStatus', filterJobStatus);
+  if (filterJobType) params.append('filterJobType', filterJobType);
+  if (filterCustomerId) params.append('filterCustomerId', filterCustomerId.toString());
+  if (filterSiteId) params.append('filterSiteId', filterSiteId.toString());
+  if (filterSearchText) params.append('filterSearchText', filterSearchText);
+
+  const jobs = await fergusClient.get(`/jobs?${params.toString()}`);
   return {
     content: [
       {
@@ -282,7 +320,7 @@ async function handleGetFinancialSummary(
   }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
-  const summary = await fergusClient.get(`/jobs/${jobId}/financial-summary`);
+  const summary = await fergusClient.get(`/jobs/${jobId}/financialSummary`);
   return {
     content: [
       {
@@ -346,14 +384,16 @@ async function handleCreatePhase(
   args: Record<string, any>
 ) {
   const { jobId: jobRef, phaseName, phaseDescription } = args;
-  if (!jobRef || !phaseName) {
-    throw new Error('jobId and phaseName are required for create-phase action');
+  if (!jobRef || !phaseName || !phaseDescription) {
+    throw new Error('jobId, phaseName, and phaseDescription are required for create-phase action');
   }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
-  const requestBody: any = { name: phaseName };
-  if (phaseDescription) requestBody.description = phaseDescription;
+  const requestBody = {
+    title: phaseName,
+    description: phaseDescription,
+  };
 
   const phase = await fergusClient.post(`/jobs/${jobId}/phases`, requestBody);
   return {
