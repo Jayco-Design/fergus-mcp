@@ -255,7 +255,7 @@ async function handleUpdateJob(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { jobId: jobRef, title, description, customerId, siteId, customerReference } = args;
+  const { jobId: jobRef, jobType, title, description, customerId, siteId, customerReference } = args;
 
   if (!jobRef) {
     throw new Error('jobId is required for update action');
@@ -266,10 +266,11 @@ async function handleUpdateJob(
   const existingJob = existingJobResponse?.data ?? existingJobResponse;
 
   // Fergus currently rejects partial job updates unless title and jobType
-  // are present, so preserve them from the existing job when omitted.
+  // are present. The read model exposes the job title as "description",
+  // so fall back to that field when "title" is absent in GET responses.
   const requestBody: any = {
-    title: title ?? existingJob?.title,
-    jobType: existingJob?.jobType,
+    title: title ?? existingJob?.title ?? existingJob?.description,
+    jobType: jobType ?? existingJob?.jobType,
   };
   if (description !== undefined) requestBody.description = description;
   if (customerId !== undefined) requestBody.customerId = customerId;
