@@ -7,7 +7,7 @@ import { FergusClient } from '../fergus-client.js';
 
 export const manageCalendarEventsToolDefinition = {
   name: 'manage-calendar-events',
-  description: 'Manage calendar events. Actions: list, get',
+  description: 'Manage calendar events. Actions: list, get. All times are stored in UTC — when querying for a local date range, offset filterDateFrom/filterDateTo to account for the company timezone (e.g. for NZDT/UTC+13, subtract 13 hours from the local start/end).',
   annotations: {
     readOnlyHint: true,
   },
@@ -25,11 +25,11 @@ export const manageCalendarEventsToolDefinition = {
       },
       filterDateFrom: {
         type: 'string',
-        description: 'Filter by start date YYYY-MM-DD (for: list)',
+        description: 'Filter by start date in ISO 8601 format e.g. 2026-03-16T00:00:00Z. Must be in UTC — offset from local time as needed (for: list)',
       },
       filterDateTo: {
         type: 'string',
-        description: 'Filter by end date YYYY-MM-DD (for: list)',
+        description: 'Filter by end date in ISO 8601 format e.g. 2026-03-17T23:59:59Z. Must be in UTC — offset from local time as needed (for: list)',
       },
       filterUserId: {
         type: 'string',

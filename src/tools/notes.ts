@@ -4,10 +4,11 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { resolveJobId } from './job-resolver.js';
 
 export const manageNotesToolDefinition = {
   name: 'manage-notes',
-  description: 'Manage notes. Actions: list',
+  description: 'Manage notes. Actions: list. Notes are attached to entities (jobs, customers, quotes, sites, enquiries, invoices, job phases, tasks). Use filterEntityName + filterEntityId to scope notes, or use filterJobRef as a shortcut for job notes.',
   annotations: {
     readOnlyHint: true,
   },
@@ -19,13 +20,22 @@ export const manageNotesToolDefinition = {
         enum: ['list'],
         description: 'The action to perform',
       },
-      filterJobId: {
+      filterEntityName: {
         type: 'string',
-        description: 'Filter by job ID (for: list)',
+        enum: ['JOB', 'CUSTOMER', 'CUSTOMER_INVOICE', 'QUOTE', 'SITE', 'TASK', 'ENQUIRY', 'JOB_PHASE'],
+        description: 'Entity type to filter notes by (for: list). Use with filterEntityId.',
       },
-      filterSearchText: {
+      filterEntityId: {
+        type: 'number',
+        description: 'Entity ID to filter notes by (for: list). Use with filterEntityName.',
+      },
+      filterJobRef: {
         type: 'string',
-        description: 'Search text (for: list)',
+        description: 'Shortcut: filter notes for a job by job number e.g. "503" or "Job-503". Resolves to filterEntityName=JOB + filterEntityId automatically. (for: list)',
+      },
+      filterCreatedById: {
+        type: 'number',
+        description: 'Filter by the user ID who created the note (for: list)',
       },
       pageSize: {
         type: 'number',
@@ -54,12 +64,25 @@ export async function handleManageNotes(
 }
 
 async function handleListNotes(fergusClient: FergusClient, args: Record<string, any>) {
-  const { filterJobId, filterSearchText, pageSize = 50, pageCursor } = args;
+  const { filterEntityName, filterEntityId, filterJobRef, filterCreatedById, pageSize = 50, pageCursor } = args;
+
+  let entityName = filterEntityName;
+  let entityId = filterEntityId;
+
+  // Shortcut: resolve job reference to entity filter
+  if (filterJobRef) {
+    const { id: jobId } = await resolveJobId(fergusClient, String(filterJobRef));
+    entityName = 'JOB';
+    entityId = jobId;
+  }
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
-  if (filterJobId) params.append('filterJobId', filterJobId);
-  if (filterSearchText) params.append('filterSearchText', filterSearchText);
+  params.append('sortField', 'created_at');
+  params.append('sortOrder', 'asc');
+  if (entityName) params.append('filterEntityName', entityName);
+  if (entityId) params.append('filterEntityId', entityId.toString());
+  if (filterCreatedById) params.append('filterCreatedById', filterCreatedById.toString());
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const notes = await fergusClient.get(`/notes?${params.toString()}`);
