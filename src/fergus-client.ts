@@ -38,6 +38,24 @@ export class FergusClient {
   /**
    * Makes an authenticated request to the Fergus API
    */
+  private async parseResponseBody(response: Response): Promise<any> {
+    const responseText = await response.text();
+    if (!responseText) {
+      return {};
+    }
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      try {
+        return JSON.parse(responseText);
+      } catch {
+        return responseText;
+      }
+    }
+
+    return responseText;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -84,7 +102,7 @@ export class FergusClient {
 
       // Handle other error responses
       if (!response.ok) {
-        const errorBody = await response.text();
+        const errorBody = await this.parseResponseBody(response);
         throw new FergusAPIError(
           `API request failed: ${response.statusText}`,
           response.status,
@@ -96,17 +114,7 @@ export class FergusClient {
         return {} as T;
       }
 
-      const responseText = await response.text();
-      if (!responseText) {
-        return {} as T;
-      }
-
-      const contentType = response.headers.get('content-type') ?? '';
-      if (contentType.includes('application/json')) {
-        return JSON.parse(responseText) as T;
-      }
-
-      return responseText as T;
+      return await this.parseResponseBody(response) as T;
     } catch (error) {
       if (error instanceof FergusAPIError) {
         throw error;

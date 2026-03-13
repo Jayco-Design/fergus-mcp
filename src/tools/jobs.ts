@@ -262,16 +262,32 @@ async function handleUpdateJob(
   }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const existingJobResponse: any = await fergusClient.get(`/jobs/${jobId}`);
+  const existingJob = existingJobResponse?.data ?? existingJobResponse;
 
-  const requestBody: any = {};
-  if (title !== undefined) requestBody.title = title;
+  // Fergus currently rejects partial job updates unless title and jobType
+  // are present, so preserve them from the existing job when omitted.
+  const requestBody: any = {
+    title: title ?? existingJob?.title,
+    jobType: existingJob?.jobType,
+  };
   if (description !== undefined) requestBody.description = description;
   if (customerId !== undefined) requestBody.customerId = customerId;
   if (siteId !== undefined) requestBody.siteId = siteId;
   if (customerReference !== undefined) requestBody.customerReference = customerReference;
 
-  if (Object.keys(requestBody).length === 0) {
+  if (
+    description === undefined &&
+    customerId === undefined &&
+    siteId === undefined &&
+    customerReference === undefined &&
+    title === undefined
+  ) {
     throw new Error('At least one field must be provided to update the job');
+  }
+
+  if (!requestBody.title || !requestBody.jobType) {
+    throw new Error('Unable to determine title and jobType required for job update');
   }
 
   const job = await fergusClient.put(`/jobs/${jobId}`, requestBody);

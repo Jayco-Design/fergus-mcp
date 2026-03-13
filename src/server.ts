@@ -10,7 +10,7 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { FergusClient } from './fergus-client.js';
+import { FergusAPIError, FergusClient } from './fergus-client.js';
 
 // Tool handlers - consolidated imports
 import { manageJobsToolDefinition, handleManageJobs } from './tools/jobs.js';
@@ -46,6 +46,28 @@ import { registerTemplateResources } from './templates/index.js';
  * @param fergusClient - Configured FergusClient instance
  * @returns Configured Server instance ready to connect to a transport
  */
+function formatErrorDetails(error: unknown): string {
+  if (error instanceof FergusAPIError) {
+    const parts = [error.message];
+
+    if (error.statusCode !== undefined) {
+      parts.push(`HTTP status: ${error.statusCode}`);
+    }
+
+    if (error.response !== undefined && error.response !== null && error.response !== '') {
+      if (typeof error.response === 'string') {
+        parts.push(`Upstream response: ${error.response}`);
+      } else {
+        parts.push(`Upstream response: ${JSON.stringify(error.response, null, 2)}`);
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
 export function createMcpServer(fergusClient: FergusClient): Server {
   // Create MCP server
   const server = new Server(
@@ -206,7 +228,7 @@ export function createMcpServer(fergusClient: FergusClient): Server {
         content: [
           {
             type: 'text',
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            text: `Error: ${formatErrorDetails(error)}`,
           },
         ],
         isError: true,
