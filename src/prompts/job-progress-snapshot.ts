@@ -35,15 +35,16 @@ export function getJobProgressSnapshotPrompt(args: { jobRef: string }) {
 
 ## Workflow
 1. Determine the job:
-   - If "${jobRef}" is numeric, try \`get-job\` directly.
-   - Otherwise run \`list-jobs\` (limit ≈ 50, desc) and match on title, customer, or site names containing "${jobRef}".
+   - If "${jobRef}" is numeric, try \`manage-jobs\` with action \`get\` directly.
+   - Otherwise run \`manage-jobs\` with action \`list\` (\`pageSize\` ≈ 50, \`sortOrder: "desc"\`) and match on title, customer, or site names containing "${jobRef}".
 2. Once you have the job, capture its status, stage, assigned staff, customer, site, and key dates.
 3. Gather financial context:
-   - Call \`list-quotes\` (pageSize ≈ 25) and filter for entries linked to this job.
-   - For the most relevant quote (typically the latest or Accepted), fetch detail via \`get-quote-detail\` to surface totals and sections.
+   - Call \`manage-quotes\` with action \`list\` using the \`jobId\` to find associated quotes.
+   - For the most relevant quote (typically the latest or Accepted), fetch detail via \`manage-quotes\` with action \`get-detail\` to surface totals and sections.
+   - Optionally call \`manage-jobs\` with action \`get-financial-summary\` for an overview.
 4. Check delivery activity:
-   - Use \`list-time-entries\` limited to the last 14 days and filter for the job ID to highlight recent work and who logged it.
-5. If the job has outstanding tasks or status blockers surfaced in the payloads, call \`get-job\` again to verify current status just before summarizing.
+   - Use \`manage-time-entries\` with action \`list\` limited to the last 14 days and filter for the job number/reference to highlight recent work and who logged it.
+5. If the job has outstanding tasks or status blockers surfaced in the payloads, call \`manage-jobs\` with action \`get\` again to verify current status just before summarizing.
 
 ## Output Expectations
 - Lead with a plain-language summary: job status, key dates, primary quote value, and notable recent time entry activity.

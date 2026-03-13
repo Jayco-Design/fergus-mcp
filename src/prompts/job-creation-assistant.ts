@@ -39,15 +39,15 @@ First, let's create a draft job with basic information:
 - **Title**: Give your job a descriptive title
 - **Draft Mode**: Start as a draft so you can fill in details progressively
 
-I can use the \`create-job\` tool to create a draft job for you. A draft job only requires:
+I can use \`manage-jobs\` with action \`create\` to create a draft job for you. A draft job only requires:
 - jobType: "${jobType}"
 - title: Your job title
 - isDraft: true (this is the default)
 
 ## Step 2: Find or Create Customer & Site
 Before finalizing the job, you'll need:
-- **Customer ID**: Search for an existing customer using \`list-customers\` or create a new one with \`create-customer\`
-- **Site ID**: Search for an existing site using \`list-sites\` or create a new one with \`create-site\`
+- **Customer ID**: Search for an existing customer using \`manage-customers\` with action \`list\` or create a new one with action \`create\`
+- **Site ID**: Search for an existing site using \`manage-sites\` with action \`list\` or create a new one with action \`create\`
 
 ## Step 3: Complete Job Details
 Once you have the customer and site IDs, update the draft job with:
@@ -56,11 +56,11 @@ Once you have the customer and site IDs, update the draft job with:
 - siteId: The site ID
 - customerReference: (optional) Customer's reference number
 
-Use the \`update-job\` tool to add these details to your draft job.
+Use \`manage-jobs\` with action \`update\` to add these details to your draft job.
 
 ## Step 4: Finalize the Job
 When all required information is complete, finalize the job to make it active:
-- Use the \`finalize-job\` tool with the job ID
+- Use \`manage-jobs\` with action \`finalize\` and the job ID
 - This converts the draft to an active job that can be scheduled and worked on
 
 ## Important Notes:

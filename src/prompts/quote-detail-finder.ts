@@ -34,10 +34,10 @@ export function getQuoteDetailFinderPrompt(args: { searchTerm: string }) {
           text: `I'll locate the relevant quote for "${searchTerm}" and return the full detail payload.
 
 ## Workflow
-1. Use \`list-customers\` with \`filterSearchText: "${searchTerm}"\` to see if the term matches a customer. Keep the \`customerId\` handy for cross-checks.
-2. Fetch recent jobs with \`list-jobs\` (limit ~25, newest first) and look for matches in the job title or related customer/site fields that mention "${searchTerm}".
-3. Call \`list-quotes\` (pageSize ~25) and filter client-side for entries whose job title, customer, or quote title include "${searchTerm}". If the first page misses it, advance using the returned \`pageCursor\`.
-4. Once you have a candidate \`jobId\` + \`quoteId\`, call \`get-quote-detail\` to retrieve sections, line items, totals, and status.
+1. Use \`manage-customers\` with action \`list\` and \`filterSearchText: "${searchTerm}"\` to see if the term matches a customer. Keep the \`customerId\` handy for cross-checks.
+2. Fetch recent jobs with \`manage-jobs\` action \`list\` (\`pageSize\` ~25, newest first) and look for matches in the job title or related customer/site fields that mention "${searchTerm}".
+3. For matching jobs, call \`manage-quotes\` with action \`list\` and the \`jobId\` to find associated quotes. If no job match, try \`manage-quotes\` with action \`list-all\` (\`pageSize\` ~25) and filter client-side.
+4. Once you have a candidate \`jobId\` + \`quoteId\`, call \`manage-quotes\` with action \`get-detail\` to retrieve sections, line items, totals, and status.
 5. If multiple quotes match, repeat step 4 as needed and present the best match first.
 
 ## Response Expectations

@@ -1,39 +1,174 @@
 /**
- * Job Tools
- * All job-related operations (get, list, create, update, finalize)
+ * Job Tools (consolidated)
+ * manage-jobs: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { resolveJobId } from './job-resolver.js';
 
-// ===== GET JOB =====
+const jobStatusOptions = ['Active', 'Completed', 'Estimate Rejected', 'Estimate Sent', 'Inactive', 'Quote Sent', 'Quote Rejected', 'To Price'] as const;
+const jobTypeOptions = ['Quote', 'Estimate', 'Charge Up'] as const;
 
-export const getJobToolDefinition = {
-  name: 'get-job',
-  description: 'Get details for a specific job by ID',
-  annotations: {
-    readOnlyHint: true
-  },
+const jobIdSchema = {
+  type: 'string',
+  description: 'Job number or API ID. Accepts user-friendly refs like "Job-500" or "500" as well as API IDs.',
+};
+
+const jobTypeSchema = {
+  type: 'string',
+  enum: [...jobTypeOptions],
+};
+
+export const manageJobsToolDefinition = {
+  name: 'manage-jobs',
+  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches.',
   inputSchema: {
     type: 'object',
     properties: {
-      jobId: {
+      action: {
         type: 'string',
-        description: 'The ID of the job to retrieve',
+        enum: ['get', 'list', 'create', 'update', 'finalize', 'get-financial-summary', 'list-phases', 'get-phase', 'create-phase'],
+        description: 'The action to perform.',
+      },
+      jobId: {
+        ...jobIdSchema,
+        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase)',
+      },
+      // list params
+      filterJobNo: {
+        type: 'string',
+        description: 'Filter by job number such as "500". Supports partial match. (for: list)',
+      },
+      filterJobStatus: {
+        type: 'string',
+        description: 'Filter by Fergus job status. (for: list)',
+        enum: [...jobStatusOptions],
+      },
+      filterJobType: {
+        ...jobTypeSchema,
+        description: 'Filter by job type. (for: list)',
+      },
+      filterCustomerId: {
+        type: 'number',
+        description: 'Filter by customer ID. (for: list)',
+      },
+      filterSiteId: {
+        type: 'number',
+        description: 'Filter by site ID. (for: list)',
+      },
+      filterSearchText: {
+        type: 'string',
+        description: 'Full-text search across job description, customer, site, contact names, and job number. (for: list)',
+      },
+      pageSize: {
+        type: 'number',
+        description: 'Maximum number of jobs to return. Default: 50. (for: list)',
+        default: 50,
+      },
+      sortField: {
+        type: 'string',
+        description: 'Field to sort by. Default: createdAt. (for: list)',
+        default: 'createdAt',
+      },
+      sortOrder: {
+        type: 'string',
+        description: 'Sort order. (for: list)',
+        enum: ['asc', 'desc'],
+        default: 'desc',
+      },
+      pageCursor: {
+        type: 'string',
+        description: 'Pagination cursor for the next page. (for: list)',
+        default: '0',
+      },
+      // create/update params
+      jobType: {
+        ...jobTypeSchema,
+        description: 'Type of job. (required for: create; optional for: update — wrapper preserves current value)',
+      },
+      title: {
+        type: 'string',
+        description: 'Job title. (required for: create; optional for: update — wrapper preserves current value)',
+      },
+      description: {
+        type: 'string',
+        description: 'Job description. Required when isDraft is false. (for: create, update)',
+      },
+      customerId: {
+        type: 'number',
+        description: 'Customer ID. Required when isDraft is false. (for: create, update)',
+      },
+      siteId: {
+        type: 'number',
+        description: 'Site ID. Required when isDraft is false. (for: create, update)',
+      },
+      customerReference: {
+        type: 'string',
+        description: 'Customer reference number. (for: create, update)',
+      },
+      isDraft: {
+        type: 'boolean',
+        description: 'Whether to create the job as a draft. Default: true. (for: create)',
+        default: true,
+      },
+      // phase params
+      jobPhaseId: {
+        type: 'string',
+        description: 'Job phase ID. (required for: get-phase)',
+      },
+      phaseName: {
+        type: 'string',
+        description: 'Phase name. (required for: create-phase)',
+      },
+      phaseDescription: {
+        type: 'string',
+        description: 'Phase description. (required for: create-phase)',
       },
     },
-    required: ['jobId'],
+    required: ['action'],
   },
 };
 
-export async function handleGetJob(
+export async function handleManageJobs(
   fergusClient: FergusClient,
-  args: { jobId?: string }
+  args: Record<string, any>
 ) {
-  const jobId = args?.jobId;
-  if (!jobId) {
-    throw new Error('jobId is required');
+  switch (args.action) {
+    case 'get':
+      return handleGetJob(fergusClient, args);
+    case 'list':
+      return handleListJobs(fergusClient, args);
+    case 'create':
+      return handleCreateJob(fergusClient, args);
+    case 'update':
+      return handleUpdateJob(fergusClient, args);
+    case 'finalize':
+      return handleFinalizeJob(fergusClient, args);
+    case 'get-financial-summary':
+      return handleGetFinancialSummary(fergusClient, args);
+    case 'list-phases':
+      return handleListPhases(fergusClient, args);
+    case 'get-phase':
+      return handleGetPhase(fergusClient, args);
+    case 'create-phase':
+      return handleCreatePhase(fergusClient, args);
+    default:
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase`);
+  }
+}
+
+// ===== GET JOB =====
+
+async function handleGetJob(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
+    throw new Error('jobId is required for get action');
   }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const job = await fergusClient.get(`/jobs/${jobId}`);
   return {
     content: [
@@ -47,60 +182,37 @@ export async function handleGetJob(
 
 // ===== LIST JOBS =====
 
-export const listJobsToolDefinition = {
-  name: 'list-jobs',
-  description: 'List all jobs with optional filtering and sorting',
-  annotations: {
-    readOnlyHint: true
-  },
-  inputSchema: {
-    type: 'object',
-    properties: {
-      status: {
-        type: 'string',
-        description: 'Filter by job status (e.g., active, completed)',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of jobs to return',
-        default: 50,
-      },
-      sortField: {
-        type: 'string',
-        description: 'Field to sort by (e.g., createdAt, lastModified)',
-        default: 'createdAt',
-      },
-      sortOrder: {
-        type: 'string',
-        description: 'Sort order: asc (oldest first) or desc (newest first)',
-        enum: ['asc', 'desc'],
-        default: 'desc',
-      },
-      pageCursor: {
-        type: 'string',
-        description: 'Pagination cursor for next page',
-        default: '0',
-      },
-    },
-  },
-};
-
-export async function handleListJobs(
+async function handleListJobs(
   fergusClient: FergusClient,
-  args: { status?: string; limit?: number; sortField?: string; sortOrder?: string; pageCursor?: string }
+  args: Record<string, any>
 ) {
-  const status = args?.status;
-  const limit = args?.limit || 50;
-  const sortField = args?.sortField || 'createdAt';
-  const sortOrder = args?.sortOrder || 'desc';
-  const pageCursor = args?.pageCursor || '0';
+  const {
+    filterJobNo,
+    filterJobStatus,
+    filterJobType,
+    filterCustomerId,
+    filterSiteId,
+    filterSearchText,
+    pageSize = 50,
+    sortField = 'createdAt',
+    sortOrder = 'desc',
+    pageCursor = '0',
+  } = args;
 
-  let endpoint = `/jobs?limit=${limit}&sortField=${sortField}&sortOrder=${sortOrder}&pageCursor=${pageCursor}`;
-  if (status) {
-    endpoint += `&status=${encodeURIComponent(status)}`;
-  }
+  const params = new URLSearchParams();
+  params.append('pageSize', pageSize.toString());
+  params.append('sortField', sortField);
+  params.append('sortOrder', sortOrder);
+  params.append('pageCursor', pageCursor);
 
-  const jobs = await fergusClient.get(endpoint);
+  if (filterJobNo) params.append('filterJobNo', filterJobNo);
+  if (filterJobStatus) params.append('filterJobStatus', filterJobStatus);
+  if (filterJobType) params.append('filterJobType', filterJobType);
+  if (filterCustomerId) params.append('filterCustomerId', filterCustomerId.toString());
+  if (filterSiteId) params.append('filterSiteId', filterSiteId.toString());
+  if (filterSearchText) params.append('filterSearchText', filterSearchText);
+
+  const jobs = await fergusClient.get(`/jobs?${params.toString()}`);
   return {
     content: [
       {
@@ -113,70 +225,16 @@ export async function handleListJobs(
 
 // ===== CREATE JOB =====
 
-export const createJobToolDefinition = {
-  name: 'create-job',
-  description: 'Create a new job (draft or finalized). Draft jobs require only jobType and title. Finalized jobs also require description, customerId, and siteId.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      jobType: {
-        type: 'string',
-        description: 'Type of job',
-        enum: ['Quote', 'Estimate', 'Charge Up'],
-      },
-      title: {
-        type: 'string',
-        description: 'Job title',
-      },
-      description: {
-        type: 'string',
-        description: 'Job description (required for non-draft jobs)',
-      },
-      customerId: {
-        type: 'number',
-        description: 'Customer ID (required for non-draft jobs)',
-      },
-      siteId: {
-        type: 'number',
-        description: 'Site ID (required for non-draft jobs)',
-      },
-      customerReference: {
-        type: 'string',
-        description: 'Customer reference number',
-      },
-      isDraft: {
-        type: 'boolean',
-        description: 'Whether to create as a draft job (default: true)',
-        default: true,
-      },
-    },
-    required: ['jobType', 'title'],
-  },
-};
-
-export async function handleCreateJob(
+async function handleCreateJob(
   fergusClient: FergusClient,
-  args: {
-    jobType: 'Quote' | 'Estimate' | 'Charge Up';
-    title: string;
-    description?: string;
-    customerId?: number;
-    siteId?: number;
-    customerReference?: string;
-    isDraft?: boolean;
-  }
+  args: Record<string, any>
 ) {
-  const {
-    jobType,
-    title,
-    description,
-    customerId,
-    siteId,
-    customerReference,
-    isDraft = true,
-  } = args;
+  const { jobType, title, description, customerId, siteId, customerReference, isDraft = true } = args;
 
-  // Validate requirements for non-draft jobs
+  if (!jobType || !title) {
+    throw new Error('jobType and title are required for create action');
+  }
+
   if (!isDraft) {
     if (!description || !customerId || !siteId) {
       throw new Error(
@@ -185,19 +243,13 @@ export async function handleCreateJob(
     }
   }
 
-  const requestBody: any = {
-    jobType,
-    title,
-    isDraft,
-  };
-
+  const requestBody: any = { jobType, title, isDraft };
   if (description) requestBody.description = description;
   if (customerId) requestBody.customerId = customerId;
   if (siteId) requestBody.siteId = siteId;
   if (customerReference) requestBody.customerReference = customerReference;
 
   const job = await fergusClient.post('/jobs', requestBody);
-
   return {
     content: [
       {
@@ -210,69 +262,47 @@ export async function handleCreateJob(
 
 // ===== UPDATE JOB =====
 
-export const updateJobToolDefinition = {
-  name: 'update-job',
-  description: 'Update an existing draft job. Can update title, description, customerId, siteId, and customerReference.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      jobId: {
-        type: 'number',
-        description: 'ID of the job to update',
-      },
-      title: {
-        type: 'string',
-        description: 'Job title',
-      },
-      description: {
-        type: 'string',
-        description: 'Job description',
-      },
-      customerId: {
-        type: 'number',
-        description: 'Customer ID',
-      },
-      siteId: {
-        type: 'number',
-        description: 'Site ID',
-      },
-      customerReference: {
-        type: 'string',
-        description: 'Customer reference number',
-      },
-    },
-    required: ['jobId'],
-  },
-};
-
-export async function handleUpdateJob(
+async function handleUpdateJob(
   fergusClient: FergusClient,
-  args: {
-    jobId: number;
-    title?: string;
-    description?: string;
-    customerId?: number;
-    siteId?: number;
-    customerReference?: string;
-  }
+  args: Record<string, any>
 ) {
-  const { jobId, ...updates } = args;
+  const { jobId: jobRef, jobType, title, description, customerId, siteId, customerReference } = args;
 
-  // Build request body with only provided fields
-  const requestBody: any = {};
-  if (updates.title !== undefined) requestBody.title = updates.title;
-  if (updates.description !== undefined) requestBody.description = updates.description;
-  if (updates.customerId !== undefined) requestBody.customerId = updates.customerId;
-  if (updates.siteId !== undefined) requestBody.siteId = updates.siteId;
-  if (updates.customerReference !== undefined) requestBody.customerReference = updates.customerReference;
+  if (!jobRef) {
+    throw new Error('jobId is required for update action');
+  }
 
-  // Validate that at least one field is being updated
-  if (Object.keys(requestBody).length === 0) {
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const existingJobResponse: any = await fergusClient.get(`/jobs/${jobId}`);
+  const existingJob = existingJobResponse?.data ?? existingJobResponse;
+
+  // Fergus currently rejects partial job updates unless title and jobType
+  // are present. The read model exposes the job title as "description",
+  // so fall back to that field when "title" is absent in GET responses.
+  const requestBody: any = {
+    title: title ?? existingJob?.title ?? existingJob?.description,
+    jobType: jobType ?? existingJob?.jobType,
+  };
+  if (description !== undefined) requestBody.description = description;
+  if (customerId !== undefined) requestBody.customerId = customerId;
+  if (siteId !== undefined) requestBody.siteId = siteId;
+  if (customerReference !== undefined) requestBody.customerReference = customerReference;
+
+  if (
+    description === undefined &&
+    customerId === undefined &&
+    siteId === undefined &&
+    customerReference === undefined &&
+    title === undefined
+  ) {
     throw new Error('At least one field must be provided to update the job');
   }
 
-  const job = await fergusClient.put(`/jobs/${jobId}`, requestBody);
+  if (!requestBody.title || !requestBody.jobType) {
+    throw new Error('Unable to determine title and jobType required for job update');
+  }
 
+  const job = await fergusClient.put(`/jobs/${jobId}`, requestBody);
   return {
     content: [
       {
@@ -285,36 +315,120 @@ export async function handleUpdateJob(
 
 // ===== FINALIZE JOB =====
 
-export const finalizeJobToolDefinition = {
-  name: 'finalize-job',
-  description: 'Finalize a draft job, converting it from draft to active status. The job must have all required fields (title, description, customerId, siteId) before it can be finalized.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      jobId: {
-        type: 'number',
-        description: 'ID of the draft job to finalize',
-      },
-    },
-    required: ['jobId'],
-  },
-};
-
-export async function handleFinalizeJob(
+async function handleFinalizeJob(
   fergusClient: FergusClient,
-  args: {
-    jobId: number;
-  }
+  args: Record<string, any>
 ) {
-  const { jobId } = args;
+  const jobRef = args.jobId;
+  if (!jobRef) {
+    throw new Error('jobId is required for finalize action');
+  }
 
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const job = await fergusClient.put(`/jobs/${jobId}/finalise`, {});
-
   return {
     content: [
       {
         type: 'text' as const,
         text: JSON.stringify(job, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== GET FINANCIAL SUMMARY =====
+
+async function handleGetFinancialSummary(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
+    throw new Error('jobId is required for get-financial-summary action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const summary = await fergusClient.get(`/jobs/${jobId}/financialSummary`);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(summary, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== LIST PHASES =====
+
+async function handleListPhases(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const jobRef = args.jobId;
+  if (!jobRef) {
+    throw new Error('jobId is required for list-phases action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const phases = await fergusClient.get(`/jobs/${jobId}/phases`);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(phases, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== GET PHASE =====
+
+async function handleGetPhase(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { jobId: jobRef, jobPhaseId } = args;
+  if (!jobRef || !jobPhaseId) {
+    throw new Error('jobId and jobPhaseId are required for get-phase action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const phase = await fergusClient.get(`/jobs/${jobId}/phases/${jobPhaseId}`);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(phase, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== CREATE PHASE =====
+
+async function handleCreatePhase(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { jobId: jobRef, phaseName, phaseDescription } = args;
+  if (!jobRef || !phaseName || !phaseDescription) {
+    throw new Error('jobId, phaseName, and phaseDescription are required for create-phase action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+
+  const requestBody = {
+    title: phaseName,
+    description: phaseDescription,
+  };
+
+  const phase = await fergusClient.post(`/jobs/${jobId}/phases`, requestBody);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(phase, null, 2),
       },
     ],
   };
