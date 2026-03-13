@@ -38,8 +38,8 @@ import { quoteDetailFinderPromptDefinition, getQuoteDetailFinderPrompt } from '.
 import { jobProgressSnapshotPromptDefinition, getJobProgressSnapshotPrompt } from './prompts/job-progress-snapshot.js';
 import { revenuePipelineSummaryPromptDefinition, getRevenuePipelineSummaryPrompt } from './prompts/revenue-pipeline-summary.js';
 
-// Template resources
-import { registerTemplateResources } from './templates/index.js';
+// MCP resources
+import { registerResources } from './resources/index.js';
 
 /**
  * Create and configure an MCP server with all tools and prompts
@@ -236,8 +236,8 @@ export function createMcpServer(fergusClient: FergusClient): Server {
     }
   });
 
-  // Register template resources for ChatGPT Apps
-  registerTemplateResources(server);
+  // Register MCP resources for ChatGPT Apps and agent guidance
+  registerResources(server);
 
   return server;
 }
