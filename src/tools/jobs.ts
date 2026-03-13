@@ -8,7 +8,6 @@ import { resolveJobId } from './job-resolver.js';
 
 const jobStatusOptions = ['Active', 'Completed', 'Estimate Rejected', 'Estimate Sent', 'Inactive', 'Quote Sent', 'Quote Rejected', 'To Price'] as const;
 const jobTypeOptions = ['Quote', 'Estimate', 'Charge Up'] as const;
-const quirksResourceHint = 'Read `docs://fergus/known-quirks.md` before write operations.';
 
 const jobIdSchema = {
   type: 'string',
@@ -22,246 +21,111 @@ const jobTypeSchema = {
 
 export const manageJobsToolDefinition = {
   name: 'manage-jobs',
-  description: 'Manage jobs with action-specific schemas. Write actions include wrapper behavior notes for Fergus API quirks.',
+  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches.',
   inputSchema: {
-    description: 'Choose exactly one job action schema.',
-    oneOf: [
-      {
-        title: 'Get Job',
-        description: 'Get a single job by job number or API ID.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get',
-            description: 'Get a single job.',
-          },
-          jobId: jobIdSchema,
-        },
-        required: ['action', 'jobId'],
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['get', 'list', 'create', 'update', 'finalize', 'get-financial-summary', 'list-phases', 'get-phase', 'create-phase'],
+        description: 'The action to perform.',
       },
-      {
-        title: 'List Jobs',
-        description: 'List jobs with Fergus filters and pagination.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'list',
-            description: 'List jobs.',
-          },
-          filterJobNo: {
-            type: 'string',
-            description: 'Filter by job number such as "500". Supports partial match.',
-          },
-          filterJobStatus: {
-            type: 'string',
-            description: 'Filter by Fergus job status.',
-            enum: [...jobStatusOptions],
-          },
-          filterJobType: {
-            ...jobTypeSchema,
-            description: 'Filter by job type.',
-          },
-          filterCustomerId: {
-            type: 'number',
-            description: 'Filter by customer ID.',
-          },
-          filterSiteId: {
-            type: 'number',
-            description: 'Filter by site ID.',
-          },
-          filterSearchText: {
-            type: 'string',
-            description: 'Full-text search across job description, customer, site, contact names, and job number.',
-          },
-          pageSize: {
-            type: 'number',
-            description: 'Maximum number of jobs to return. Default: 50.',
-            default: 50,
-          },
-          sortField: {
-            type: 'string',
-            description: 'Field to sort by. Default: createdAt.',
-            default: 'createdAt',
-          },
-          sortOrder: {
-            type: 'string',
-            description: 'Sort order.',
-            enum: ['asc', 'desc'],
-            default: 'desc',
-          },
-          pageCursor: {
-            type: 'string',
-            description: 'Pagination cursor for the next page.',
-            default: '0',
-          },
-        },
-        required: ['action'],
+      jobId: {
+        ...jobIdSchema,
+        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase)',
       },
-      {
-        title: 'Create Job',
-        description: `Create a new job. Behavior Notes: draft jobs only require jobType and title; non-draft jobs also require description, customerId, and siteId. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'create',
-            description: 'Create a new job.',
-          },
-          jobType: {
-            ...jobTypeSchema,
-            description: 'Type of job to create.',
-          },
-          title: {
-            type: 'string',
-            description: 'Job title.',
-          },
-          description: {
-            type: 'string',
-            description: 'Job description. Required when isDraft is false.',
-          },
-          customerId: {
-            type: 'number',
-            description: 'Customer ID. Required when isDraft is false.',
-          },
-          siteId: {
-            type: 'number',
-            description: 'Site ID. Required when isDraft is false.',
-          },
-          customerReference: {
-            type: 'string',
-            description: 'Customer reference number.',
-          },
-          isDraft: {
-            type: 'boolean',
-            description: 'Whether to create the job as a draft. Default: true.',
-            default: true,
-          },
-        },
-        required: ['action', 'jobType', 'title'],
+      // list params
+      filterJobNo: {
+        type: 'string',
+        description: 'Filter by job number such as "500". Supports partial match. (for: list)',
       },
-      {
-        title: 'Update Job',
-        description: `Update a draft job. Behavior Notes: Fergus currently rejects partial updates unless title and jobType are present. This wrapper reads the current job and preserves those fields when omitted, but callers can still supply title and jobType explicitly if needed. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'update',
-            description: 'Update a draft job.',
-          },
-          jobId: jobIdSchema,
-          title: {
-            type: 'string',
-            description: 'Explicit job title override. Usually optional because the wrapper preserves the current title.',
-          },
-          jobType: {
-            ...jobTypeSchema,
-            description: 'Explicit job type override. Usually optional because the wrapper preserves the current job type.',
-          },
-          description: {
-            type: 'string',
-            description: 'Updated job description.',
-          },
-          customerId: {
-            type: 'number',
-            description: 'Updated customer ID.',
-          },
-          siteId: {
-            type: 'number',
-            description: 'Updated site ID.',
-          },
-          customerReference: {
-            type: 'string',
-            description: 'Updated customer reference number.',
-          },
-        },
-        required: ['action', 'jobId'],
+      filterJobStatus: {
+        type: 'string',
+        description: 'Filter by Fergus job status. (for: list)',
+        enum: [...jobStatusOptions],
       },
-      {
-        title: 'Finalize Job',
-        description: `Finalize a draft job. Behavior Notes: Fergus expects the job to already satisfy its required draft fields before finalization. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'finalize',
-            description: 'Finalize a draft job.',
-          },
-          jobId: jobIdSchema,
-        },
-        required: ['action', 'jobId'],
+      filterJobType: {
+        ...jobTypeSchema,
+        description: 'Filter by job type. (for: list)',
       },
-      {
-        title: 'Get Job Financial Summary',
-        description: 'Get the financial summary for a job.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get-financial-summary',
-            description: 'Get the job financial summary.',
-          },
-          jobId: jobIdSchema,
-        },
-        required: ['action', 'jobId'],
+      filterCustomerId: {
+        type: 'number',
+        description: 'Filter by customer ID. (for: list)',
       },
-      {
-        title: 'List Job Phases',
-        description: 'List phases for a job.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'list-phases',
-            description: 'List job phases.',
-          },
-          jobId: jobIdSchema,
-        },
-        required: ['action', 'jobId'],
+      filterSiteId: {
+        type: 'number',
+        description: 'Filter by site ID. (for: list)',
       },
-      {
-        title: 'Get Job Phase',
-        description: 'Get a single phase on a job.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get-phase',
-            description: 'Get a specific job phase.',
-          },
-          jobId: jobIdSchema,
-          jobPhaseId: {
-            type: 'string',
-            description: 'Job phase ID.',
-          },
-        },
-        required: ['action', 'jobId', 'jobPhaseId'],
+      filterSearchText: {
+        type: 'string',
+        description: 'Full-text search across job description, customer, site, contact names, and job number. (for: list)',
       },
-      {
-        title: 'Create Job Phase',
-        description: `Create a phase on a job. Behavior Notes: Fergus requires both phase name and phase description. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'create-phase',
-            description: 'Create a job phase.',
-          },
-          jobId: jobIdSchema,
-          phaseName: {
-            type: 'string',
-            description: 'Phase name.',
-          },
-          phaseDescription: {
-            type: 'string',
-            description: 'Phase description.',
-          },
-        },
-        required: ['action', 'jobId', 'phaseName', 'phaseDescription'],
+      pageSize: {
+        type: 'number',
+        description: 'Maximum number of jobs to return. Default: 50. (for: list)',
+        default: 50,
       },
-    ],
+      sortField: {
+        type: 'string',
+        description: 'Field to sort by. Default: createdAt. (for: list)',
+        default: 'createdAt',
+      },
+      sortOrder: {
+        type: 'string',
+        description: 'Sort order. (for: list)',
+        enum: ['asc', 'desc'],
+        default: 'desc',
+      },
+      pageCursor: {
+        type: 'string',
+        description: 'Pagination cursor for the next page. (for: list)',
+        default: '0',
+      },
+      // create/update params
+      jobType: {
+        ...jobTypeSchema,
+        description: 'Type of job. (required for: create; optional for: update — wrapper preserves current value)',
+      },
+      title: {
+        type: 'string',
+        description: 'Job title. (required for: create; optional for: update — wrapper preserves current value)',
+      },
+      description: {
+        type: 'string',
+        description: 'Job description. Required when isDraft is false. (for: create, update)',
+      },
+      customerId: {
+        type: 'number',
+        description: 'Customer ID. Required when isDraft is false. (for: create, update)',
+      },
+      siteId: {
+        type: 'number',
+        description: 'Site ID. Required when isDraft is false. (for: create, update)',
+      },
+      customerReference: {
+        type: 'string',
+        description: 'Customer reference number. (for: create, update)',
+      },
+      isDraft: {
+        type: 'boolean',
+        description: 'Whether to create the job as a draft. Default: true. (for: create)',
+        default: true,
+      },
+      // phase params
+      jobPhaseId: {
+        type: 'string',
+        description: 'Job phase ID. (required for: get-phase)',
+      },
+      phaseName: {
+        type: 'string',
+        description: 'Phase name. (required for: create-phase)',
+      },
+      phaseDescription: {
+        type: 'string',
+        description: 'Phase description. (required for: create-phase)',
+      },
+    },
+    required: ['action'],
   },
 };
 

@@ -9,7 +9,6 @@ import { resolveJobId } from './job-resolver.js';
 const quoteStatusOptions = ['draft', 'accepted', 'voided', 'superseded', 'declined', 'published', 'emailSent', 'emailNotSent'] as const;
 const quoteListSortOptions = ['id', 'versionNumber'] as const;
 const quoteListAllSortOptions = ['id', 'createdAt', 'lastModified'] as const;
-const quirksResourceHint = 'Read `docs://fergus/known-quirks.md` before write operations.';
 
 const quoteSectionSchema = {
   type: 'object',
@@ -74,284 +73,101 @@ const sectionsSchema = {
 
 export const manageQuotesToolDefinition = {
   name: 'manage-quotes',
-  description: 'Manage quotes with action-specific schemas. Write actions include wrapper behavior notes for Fergus API quirks.',
+  description: 'Manage quotes. Actions: get, get-by-guid, get-detail, list (per job), list-all (across jobs), create, update, update-version, get-totals, accept. The wrapper preserves title/description on updates. Only draft quotes can be updated.',
   inputSchema: {
-    description: 'Choose exactly one quote action schema.',
-    oneOf: [
-      {
-        title: 'Get Quote',
-        description: 'Get a quote by quote ID using the global quote endpoint.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get',
-            description: 'Get a quote by ID.',
-          },
-          quoteId: {
-            type: 'string',
-            description: 'Quote ID.',
-          },
-        },
-        required: ['action', 'quoteId'],
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['get', 'get-by-guid', 'get-detail', 'list', 'list-all', 'create', 'update', 'update-version', 'get-totals', 'accept'],
+        description: 'The action to perform.',
       },
-      {
-        title: 'Get Quote By GUID',
-        description: 'Get a quote by public GUID using the Fergus global GUID endpoint.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get-by-guid',
-            description: 'Get a quote by GUID.',
-          },
-          quoteGuid: {
-            type: 'string',
-            description: 'Quote GUID.',
-          },
-        },
-        required: ['action', 'quoteGuid'],
+      quoteId: {
+        type: 'string',
+        description: 'Quote ID. (required for: get, get-detail, update, get-totals, accept)',
       },
-      {
-        title: 'Get Job Quote Detail',
-        description: 'Get quote detail using the job-scoped quote endpoint.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get-detail',
-            description: 'Get detailed quote data for a job.',
-          },
-          jobId: {
-            type: 'string',
-            description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID.',
-          },
-          quoteId: {
-            type: 'string',
-            description: 'Quote ID.',
-          },
-        },
-        required: ['action', 'jobId', 'quoteId'],
+      quoteGuid: {
+        type: 'string',
+        description: 'Quote public GUID. (required for: get-by-guid)',
       },
-      {
-        title: 'List Quotes For Job',
-        description: 'List quotes for a single job. Use list-all to search quotes across all jobs.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'list',
-            description: 'List quotes for one job.',
-          },
-          jobId: {
-            type: 'string',
-            description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID.',
-          },
-          filterStatus: {
-            type: 'string',
-            description: 'Filter by quote status.',
-            enum: [...quoteStatusOptions],
-          },
-          pageSize: {
-            type: 'number',
-            description: 'Maximum quotes to return. Default: 50.',
-            default: 50,
-          },
-          sortField: {
-            type: 'string',
-            description: 'Sort field for job-scoped listing.',
-            enum: [...quoteListSortOptions],
-          },
-          sortOrder: {
-            type: 'string',
-            description: 'Sort order.',
-            enum: ['asc', 'desc'],
-          },
-          pageCursor: {
-            type: 'string',
-            description: 'Pagination cursor for the next page.',
-          },
-        },
-        required: ['action', 'jobId'],
+      jobId: {
+        type: 'string',
+        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. (required for: get-detail, list, create, update, update-version)',
       },
-      {
-        title: 'List Quotes Across All Jobs',
-        description: 'List quotes across all jobs using Fergus global quote listing.',
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'list-all',
-            description: 'List quotes across all jobs.',
-          },
-          filterStatus: {
-            type: 'string',
-            description: 'Filter by quote status.',
-            enum: [...quoteStatusOptions],
-          },
-          createdAfter: {
-            type: 'string',
-            description: 'Filter quotes created after this ISO 8601 timestamp.',
-          },
-          modifiedAfter: {
-            type: 'string',
-            description: 'Filter quotes modified after this ISO 8601 timestamp.',
-          },
-          pageSize: {
-            type: 'number',
-            description: 'Maximum quotes to return. Default: 50.',
-            default: 50,
-          },
-          sortField: {
-            type: 'string',
-            description: 'Sort field for global quote listing.',
-            enum: [...quoteListAllSortOptions],
-          },
-          sortOrder: {
-            type: 'string',
-            description: 'Sort order.',
-            enum: ['asc', 'desc'],
-          },
-          pageCursor: {
-            type: 'string',
-            description: 'Pagination cursor for the next page.',
-          },
-        },
-        required: ['action'],
+      // list/list-all params
+      filterStatus: {
+        type: 'string',
+        description: 'Filter by quote status. (for: list, list-all)',
+        enum: [...quoteStatusOptions],
       },
-      {
-        title: 'Create Quote',
-        description: `Create a quote for a job. Behavior Notes: quote line items must use either salesAccountId or isLabour, not both. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'create',
-            description: 'Create a quote.',
-          },
-          jobId: {
-            type: 'string',
-            description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID.',
-          },
-          title: {
-            type: 'string',
-            description: 'Quote title.',
-          },
-          description: {
-            type: 'string',
-            description: 'Quote description.',
-          },
-          dueDays: {
-            type: 'number',
-            description: 'Days until the quote is due. Fergus accepts 7-180.',
-            minimum: 7,
-            maximum: 180,
-          },
-          sections: sectionsSchema,
-        },
-        required: ['action', 'jobId', 'title', 'dueDays', 'sections'],
+      createdAfter: {
+        type: 'string',
+        description: 'Filter quotes created after this ISO 8601 timestamp. (for: list-all)',
       },
-      {
-        title: 'Update Quote',
-        description: `Update a quote by quote ID. Behavior Notes: Fergus only allows draft quotes to be updated, and the sections array replaces all existing sections. This wrapper preserves existing title and description before sending the update payload. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'update',
-            description: 'Update a quote by quote ID.',
-          },
-          jobId: {
-            type: 'string',
-            description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID.',
-          },
-          quoteId: {
-            type: 'string',
-            description: 'Quote ID.',
-          },
-          sections: sectionsSchema,
-        },
-        required: ['action', 'jobId', 'quoteId', 'sections'],
+      modifiedAfter: {
+        type: 'string',
+        description: 'Filter quotes modified after this ISO 8601 timestamp. (for: list-all)',
       },
-      {
-        title: 'Update Quote By Version',
-        description: `Update a quote by version number. Behavior Notes: Fergus only allows draft quotes to be updated, and the sections array replaces all existing sections. This wrapper preserves existing title and description before sending the update payload. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'update-version',
-            description: 'Update a quote by version number.',
-          },
-          jobId: {
-            type: 'string',
-            description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID.',
-          },
-          versionNumber: {
-            type: 'number',
-            description: 'Quote version number.',
-          },
-          sections: sectionsSchema,
-        },
-        required: ['action', 'jobId', 'versionNumber', 'sections'],
+      pageSize: {
+        type: 'number',
+        description: 'Maximum quotes to return. Default: 50. (for: list, list-all)',
+        default: 50,
       },
-      {
-        title: 'Get Quote Totals',
-        description: `Get quote totals using the Fergus global totals endpoint. Behavior Notes: selectedSectionIds may be needed for optional or multi-select sections. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'get-totals',
-            description: 'Get quote totals.',
-          },
-          quoteId: {
-            type: 'string',
-            description: 'Quote ID.',
-          },
-          selectedSectionIds: {
-            type: 'array',
-            items: {
-              type: 'number',
-            },
-            description: 'Optional section IDs to include in the totals calculation.',
-          },
-        },
-        required: ['action', 'quoteId'],
+      sortField: {
+        type: 'string',
+        description: 'Sort field. For list: id, versionNumber. For list-all: id, createdAt, lastModified. (for: list, list-all)',
       },
-      {
-        title: 'Accept Quote',
-        description: `Accept a quote using the Fergus global accept endpoint. Behavior Notes: acceptedBy is required and selectedSectionIds may be needed for optional or multi-select sections. ${quirksResourceHint}`,
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: {
-            const: 'accept',
-            description: 'Accept a quote.',
-          },
-          quoteId: {
-            type: 'string',
-            description: 'Quote ID.',
-          },
-          acceptedBy: {
-            type: 'string',
-            description: 'Name or employee GUID of the person accepting the quote.',
-          },
-          acceptedAt: {
-            type: 'string',
-            description: 'Optional acceptance timestamp in ISO 8601 format.',
-          },
-          selectedSectionIds: {
-            type: 'array',
-            items: {
-              type: 'number',
-            },
-            description: 'Optional section IDs accepted by the customer.',
-          },
-        },
-        required: ['action', 'quoteId', 'acceptedBy'],
+      sortOrder: {
+        type: 'string',
+        description: 'Sort order. (for: list, list-all)',
+        enum: ['asc', 'desc'],
       },
-    ],
+      pageCursor: {
+        type: 'string',
+        description: 'Pagination cursor for the next page. (for: list, list-all)',
+      },
+      // create params
+      title: {
+        type: 'string',
+        description: 'Quote title. (required for: create)',
+      },
+      description: {
+        type: 'string',
+        description: 'Quote description. (for: create)',
+      },
+      dueDays: {
+        type: 'number',
+        description: 'Days until the quote is due, 7-180. (required for: create)',
+        minimum: 7,
+        maximum: 180,
+      },
+      // create/update/update-version params
+      sections: {
+        ...sectionsSchema,
+        description: 'Array of quote sections with line items. Replaces all existing sections on update. Line items use either salesAccountId or isLabour, not both. (required for: create, update, update-version)',
+      },
+      // update-version params
+      versionNumber: {
+        type: 'number',
+        description: 'Quote version number. (required for: update-version)',
+      },
+      // get-totals/accept params
+      selectedSectionIds: {
+        type: 'array',
+        items: { type: 'number' },
+        description: 'Section IDs to include in totals calculation or acceptance. (for: get-totals, accept)',
+      },
+      // accept params
+      acceptedBy: {
+        type: 'string',
+        description: 'Name or employee GUID of the person accepting. (required for: accept)',
+      },
+      acceptedAt: {
+        type: 'string',
+        description: 'Acceptance timestamp in ISO 8601 format. (for: accept)',
+      },
+    },
+    required: ['action'],
   },
 };
 

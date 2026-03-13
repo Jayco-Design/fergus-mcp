@@ -75,44 +75,6 @@ export const manageCustomersToolDefinition = {
     },
     required: ['action'],
   },
-  outputSchema: {
-    type: 'object',
-    properties: {
-      customer: {
-        type: 'object',
-        properties: {
-          id: { type: ['number', 'string'] },
-          name: { type: 'string' },
-          customerFullName: { type: 'string' },
-          email: { type: ['string', 'null'] },
-          phone: { type: ['string', 'null'] },
-          mainContact: { type: ['object', 'null'] },
-          physicalAddress: { type: ['object', 'null'] },
-          postalAddress: { type: ['object', 'null'] },
-        },
-      },
-      customers: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: ['number', 'string'] },
-            name: { type: 'string' },
-            email: { type: ['string', 'null'] },
-            phone: { type: ['string', 'null'] },
-          },
-        },
-      },
-      pagination: {
-        type: 'object',
-        properties: {
-          count: { type: 'number' },
-          total: { type: 'number' },
-          nextCursor: { type: ['string', 'null'] },
-        },
-      },
-    },
-  },
 };
 
 export async function handleManageCustomers(

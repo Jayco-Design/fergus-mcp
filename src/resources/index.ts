@@ -25,31 +25,25 @@ type ResourceDefinition = {
 
 const KNOWN_FERGUS_QUIRKS_TEXT = `# Known Fergus Quirks
 
-Read this before write operations that target Fergus jobs or quotes.
+This resource is supplemental context only.
+The primary contract for MCP callers is the tool schema, the action descriptions, and the returned error messages.
+Use this document for extra background and troubleshooting.
 
-## Job updates
-- Fergus currently rejects partial \`PUT /jobs/{jobId}\` updates unless \`title\` and \`jobType\` are present.
-- This MCP wrapper reads the current job first and preserves those fields when the caller omits them.
-- Fergus job read and write models are inconsistent: job reads may expose the write-model title under \`description\`.
-- Job updates are intended for draft jobs. If a non-draft job rejects an update, verify its current status before retrying.
+## Job model mismatch
+- Fergus job reads and writes are not perfectly aligned.
+- In practice, a job GET can expose the write-model title under \`description\`.
+- The MCP wrapper compensates for that mismatch during job updates.
 
-## Quote updates
-- Quote updates replace the entire \`sections\` array. Always send the full intended section set, not just a partial delta.
-- The wrapper preserves existing quote \`title\` and \`description\` before update because Fergus is strict about those payloads.
-- Quote update and quote version update operations only work on draft quotes.
+## Quote payload preservation
+- The wrapper preserves current quote \`title\` and \`description\` during update flows because Fergus is strict about those payloads.
+- Quote updates still replace the full \`sections\` array.
 
-## Quote acceptance and totals
-- Quote acceptance uses the global endpoint \`/jobs/quotes/{quoteId}/accept\`, not the job-scoped quote endpoint.
-- Quote totals uses the global endpoint \`/jobs/quotes/{quoteId}/totals\`.
-- \`acceptedBy\` is required for quote acceptance.
-- \`selectedSectionIds\` may be required when accepting or totaling quotes with optional or multi-select sections.
+## Validation failures may look like server failures
+- Fergus sometimes reports validation failures as HTTP 500 responses with a structured JSON error body.
+- This MCP server forwards the HTTP status and upstream response body so callers can react to the actual validation message.
 
 ## Time entries
 - The published Fergus API currently documents list/search for time entries, but not a dedicated get-by-id endpoint.
-
-## Error handling
-- Fergus sometimes returns validation failures as HTTP 500 responses with a structured error body.
-- This MCP server forwards the Fergus HTTP status and upstream response body back to the caller so agents can react to the real validation message.
 `;
 
 const RESOURCES: ResourceDefinition[] = [
@@ -77,7 +71,7 @@ const RESOURCES: ResourceDefinition[] = [
   {
     uri: KNOWN_FERGUS_QUIRKS_URI,
     name: 'Known Fergus Quirks',
-    description: 'Write-safety notes and wrapper behavior details for Fergus jobs, quotes, and errors',
+    description: 'Supplemental background and troubleshooting notes for Fergus wrapper behavior',
     mimeType: 'text/markdown',
     text: KNOWN_FERGUS_QUIRKS_TEXT,
   },
