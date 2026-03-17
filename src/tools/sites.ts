@@ -1,117 +1,131 @@
 /**
- * Site Tools
- * All site-related operations (get, list, create, update)
+ * Site Tools (consolidated)
+ * manage-sites: get, list, create, update
  */
 
 import { FergusClient } from '../fergus-client.js';
 import { addressSchema, contactSchema } from './schemas.js';
 
-// ===== GET SITE =====
-
-export const getSiteToolDefinition = {
-  name: 'get-site',
-  description: 'Get details of a specific site by ID',
-  annotations: {
-    readOnlyHint: true
-  },
+export const manageSitesToolDefinition = {
+  name: 'manage-sites',
+  description: 'Manage sites. Actions: get, list, create, update',
   inputSchema: {
     type: 'object',
     properties: {
+      action: {
+        type: 'string',
+        enum: ['get', 'list', 'create', 'update'],
+        description: 'The action to perform',
+      },
       siteId: {
         type: 'string',
-        description: 'The ID of the site to retrieve',
+        description: 'Site ID (required for: get, update)',
       },
-    },
-    required: ['siteId'],
-  },
-};
-
-export async function handleGetSite(
-  fergusClient: FergusClient,
-  args: { siteId: string }
-) {
-  const { siteId } = args;
-
-  if (!siteId) {
-    throw new Error('siteId is required');
-  }
-
-  const site = await fergusClient.get(`/sites/${siteId}`);
-
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(site, null, 2),
-      },
-    ],
-  };
-}
-
-// ===== LIST SITES =====
-
-export const listSitesToolDefinition = {
-  name: 'list-sites',
-  description: 'List sites with optional search and filtering',
-  annotations: {
-    readOnlyHint: true
-  },
-  inputSchema: {
-    type: 'object',
-    properties: {
+      // list params
       filterSearchText: {
         type: 'string',
-        description: 'Search text to filter sites',
+        description: 'Search text to filter sites (for: list)',
       },
       filterSiteName: {
         type: 'string',
-        description: 'Filter by site name',
+        description: 'Filter by site name (for: list)',
       },
       filterAddressCity: {
         type: 'string',
-        description: 'Filter by city',
+        description: 'Filter by city (for: list)',
       },
       filterAddressPostalCode: {
         type: 'string',
-        description: 'Filter by postal code',
+        description: 'Filter by postal code (for: list)',
       },
       pageSize: {
         type: 'number',
-        description: 'Maximum number of sites to return per page',
+        description: 'Max results per page (for: list, default: 10)',
         default: 10,
       },
       sortField: {
         type: 'string',
-        description: 'Field to sort by',
+        description: 'Field to sort by (for: list, default: name)',
         default: 'name',
       },
       sortOrder: {
         type: 'string',
-        description: 'Sort order: asc or desc',
+        description: 'Sort order: asc or desc (for: list)',
         enum: ['asc', 'desc'],
         default: 'asc',
       },
       pageCursor: {
         type: 'string',
-        description: 'Pagination cursor for next page',
+        description: 'Pagination cursor (for: list)',
         default: '0',
       },
+      // create/update params
+      name: {
+        type: 'string',
+        description: 'Site name (for: create, update)',
+      },
+      defaultContact: {
+        ...contactSchema,
+        description: 'Default contact for the site (required for: create)',
+        required: ['firstName'],
+      },
+      billingContact: {
+        ...contactSchema,
+        description: 'Billing contact for the site (for: create)',
+      },
+      siteAddress: {
+        ...addressSchema,
+        description: 'Physical address of the site (required for: create, update)',
+      },
+      postalAddress: {
+        ...addressSchema,
+        description: 'Postal address (for: create, update)',
+      },
     },
+    required: ['action'],
   },
 };
 
-export async function handleListSites(
+export async function handleManageSites(
   fergusClient: FergusClient,
-  args: {
-    filterSearchText?: string;
-    filterSiteName?: string;
-    filterAddressCity?: string;
-    filterAddressPostalCode?: string;
-    pageSize?: number;
-    sortField?: string;
-    sortOrder?: string;
-    pageCursor?: string;
+  args: Record<string, any>
+) {
+  switch (args.action) {
+    case 'get':
+      return handleGetSite(fergusClient, args);
+    case 'list':
+      return handleListSites(fergusClient, args);
+    case 'create':
+      return handleCreateSite(fergusClient, args);
+    case 'update':
+      return handleUpdateSite(fergusClient, args);
+    default:
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update`);
   }
+}
+
+// ===== GET SITE =====
+
+async function handleGetSite(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { siteId } = args;
+  if (!siteId) {
+    throw new Error('siteId is required for get action');
+  }
+
+  const site = await fergusClient.get(`/sites/${siteId}`);
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(site, null, 2) }],
+  };
+}
+
+// ===== LIST SITES =====
+
+async function handleListSites(
+  fergusClient: FergusClient,
+  args: Record<string, any>
 ) {
   const {
     filterSearchText,
@@ -122,31 +136,25 @@ export async function handleListSites(
     sortField = 'name',
     sortOrder = 'asc',
     pageCursor = '0',
-  } = args || {};
+  } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   params.append('sortField', sortField);
   params.append('sortOrder', sortOrder);
   params.append('pageCursor', pageCursor);
-
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
   if (filterSiteName) params.append('filterSiteName', filterSiteName);
   if (filterAddressCity) params.append('filterAddressCity', filterAddressCity);
   if (filterAddressPostalCode) params.append('filterAddressPostalCode', filterAddressPostalCode);
 
-  const endpoint = `/sites?${params.toString()}`;
-  const response = await fergusClient.get(endpoint) as any;
-
-  // Extract sites array from response
+  const response = await fergusClient.get(`/sites?${params.toString()}`) as any;
   const sites = Array.isArray(response) ? response : (response.data || response.sites || []);
   const totalCount = response.total || response.totalCount || sites.length;
   const nextCursor = response.nextCursor || response.pageCursor || null;
 
-  // Create a concise text summary
   const summary = `Found ${sites.length} site(s)${totalCount > sites.length ? ` of ${totalCount} total` : ''}`;
 
-  // Structure the data for better ChatGPT consumption
   const structuredSites = sites.map((site: any) => ({
     id: site.id || site.siteId,
     name: site.name,
@@ -165,167 +173,54 @@ export async function handleListSites(
 
   return {
     content: [
-      {
-        type: 'text' as const,
-        text: `${summary}\n\n${JSON.stringify(structuredSites, null, 2)}`,
-      },
+      { type: 'text' as const, text: `${summary}\n\n${JSON.stringify(structuredSites, null, 2)}` },
     ],
-    // Structured content for ChatGPT Apps to consume
     structuredContent: {
       sites: structuredSites,
-      pagination: {
-        count: sites.length,
-        total: totalCount,
-        nextCursor,
-      },
+      pagination: { count: sites.length, total: totalCount, nextCursor },
     },
   };
 }
 
 // ===== CREATE SITE =====
 
-export const createSiteToolDefinition = {
-  name: 'create-site',
-  description: 'Create a new site with required defaultContact and siteAddress.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      name: {
-        type: 'string',
-        description: 'Site name (optional)',
-      },
-      defaultContact: {
-        ...contactSchema,
-        description: 'Default contact for the site (required)',
-        required: ['firstName'],
-      },
-      billingContact: {
-        ...contactSchema,
-        description: 'Billing contact for the site (optional)',
-      },
-      siteAddress: {
-        ...addressSchema,
-        description: 'Physical address of the site (required)',
-      },
-      postalAddress: {
-        ...addressSchema,
-        description: 'Postal address (optional, same structure as siteAddress)',
-      },
-    },
-    required: ['defaultContact', 'siteAddress'],
-  },
-};
-
-export async function handleCreateSite(
+async function handleCreateSite(
   fergusClient: FergusClient,
-  args: {
-    name?: string;
-    defaultContact: {
-      firstName: string;
-      lastName?: string;
-      position?: string;
-      company?: string;
-      contactItems?: Array<{
-        contactType: 'email' | 'phone' | 'mobile' | 'other' | 'fax' | 'website';
-        contactValue: string;
-      }>;
-    };
-    billingContact?: any;
-    siteAddress: any;
-    postalAddress?: any;
-  }
+  args: Record<string, any>
 ) {
   const { name, defaultContact, billingContact, siteAddress, postalAddress } = args;
-
-  const requestBody: any = {
-    defaultContact,
-    siteAddress,
-  };
-
-  if (name) {
-    requestBody.name = name;
+  if (!defaultContact || !siteAddress) {
+    throw new Error('defaultContact and siteAddress are required for create action');
   }
 
-  if (billingContact) {
-    requestBody.billingContact = billingContact;
-  }
-
-  if (postalAddress) {
-    requestBody.postalAddress = postalAddress;
-  }
+  const requestBody: any = { defaultContact, siteAddress };
+  if (name) requestBody.name = name;
+  if (billingContact) requestBody.billingContact = billingContact;
+  if (postalAddress) requestBody.postalAddress = postalAddress;
 
   const site = await fergusClient.post('/sites', requestBody);
-
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(site, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(site, null, 2) }],
   };
 }
 
 // ===== UPDATE SITE =====
 
-export const updateSiteToolDefinition = {
-  name: 'update-site',
-  description: 'Update an existing site. Requires siteId and siteAddress.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      siteId: {
-        type: 'number',
-        description: 'The ID of the site to update',
-      },
-      name: {
-        type: 'string',
-        description: 'Site name (optional)',
-      },
-      siteAddress: {
-        ...addressSchema,
-        description: 'Physical address of the site (required)',
-      },
-      postalAddress: {
-        ...addressSchema,
-        description: 'Postal address (optional, same structure as siteAddress)',
-      },
-    },
-    required: ['siteId', 'siteAddress'],
-  },
-};
-
-export async function handleUpdateSite(
+async function handleUpdateSite(
   fergusClient: FergusClient,
-  args: {
-    siteId: number;
-    name?: string;
-    siteAddress: any;
-    postalAddress?: any;
-  }
+  args: Record<string, any>
 ) {
   const { siteId, name, siteAddress, postalAddress } = args;
-
-  const requestBody: any = {
-    siteAddress,
-  };
-
-  if (name) {
-    requestBody.name = name;
+  if (!siteId || !siteAddress) {
+    throw new Error('siteId and siteAddress are required for update action');
   }
 
-  if (postalAddress) {
-    requestBody.postalAddress = postalAddress;
-  }
+  const requestBody: any = { siteAddress };
+  if (name) requestBody.name = name;
+  if (postalAddress) requestBody.postalAddress = postalAddress;
 
   const site = await fergusClient.patch(`/sites/${siteId}`, requestBody);
-
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(site, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(site, null, 2) }],
   };
 }

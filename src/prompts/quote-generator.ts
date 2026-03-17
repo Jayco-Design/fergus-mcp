@@ -60,7 +60,8 @@ A quote consists of:
 
 \`\`\`json
 {
-  "jobId": ${jobId},
+  "action": "create",
+  "jobId": "${jobId}",
   "title": "Kitchen Renovation Quote",
   "dueDays": 30,
   "sections": [
@@ -105,9 +106,9 @@ A quote consists of:
 5. **Sort order**: Use \`sortOrder\` to control the display order
 
 ## Tools Available:
-- \`get-job\`: Fetch job details to understand scope
-- \`create-quote\`: Create the quote with sections and line items
-- \`update-quote\`: Modify an existing quote (replaces all sections)
+- \`manage-jobs\` with action \`get\`: Fetch job details to understand scope
+- \`manage-quotes\` with action \`create\`: Create the quote with sections and line items
+- \`manage-quotes\` with action \`update\`: Modify an existing quote (replaces all sections)
 
 Let me fetch the job details for job ${jobId} so we can create an appropriate quote structure. What type of work is this quote for?`,
         },

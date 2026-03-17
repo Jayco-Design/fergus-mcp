@@ -1,127 +1,99 @@
 /**
- * Time Entry Tools
- * All time entry-related operations (get, list)
+ * Time Entry Tools (consolidated)
+ * manage-time-entries: list
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { extractJobNo } from './job-resolver.js';
 
-// ===== GET TIME ENTRY =====
-
-export const getTimeEntryToolDefinition = {
-  name: 'get-time-entry',
-  description: 'Get details of a specific time entry by ID',
+export const manageTimeEntriesToolDefinition = {
+  name: 'manage-time-entries',
+  description: 'Manage time entries. Actions: list',
   annotations: {
-    readOnlyHint: true
+    readOnlyHint: true,
   },
   inputSchema: {
     type: 'object',
     properties: {
-      timeEntryId: {
+      action: {
         type: 'string',
-        description: 'The ID of the time entry to retrieve',
+        enum: ['list'],
+        description: 'The action to perform',
       },
-    },
-    required: ['timeEntryId'],
-  },
-};
-
-export async function handleGetTimeEntry(
-  fergusClient: FergusClient,
-  args: { timeEntryId: string }
-) {
-  const { timeEntryId } = args;
-
-  if (!timeEntryId) {
-    throw new Error('timeEntryId is required');
-  }
-
-  const timeEntry = await fergusClient.get(`/timeEntries/${timeEntryId}`);
-
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(timeEntry, null, 2),
-      },
-    ],
-  };
-}
-
-// ===== LIST TIME ENTRIES =====
-
-export const listTimeEntriesToolDefinition = {
-  name: 'list-time-entries',
-  description: 'List time entries with optional filtering by user, job, and date range',
-  annotations: {
-    readOnlyHint: true
-  },
-  inputSchema: {
-    type: 'object',
-    properties: {
+      // list params
       filterUserId: {
         type: 'string',
-        description: 'Filter by user ID',
+        description: 'Filter by user ID (for: list)',
       },
-      filterJobNo: {
+      filterJob: {
         type: 'string',
-        description: 'Filter by job number',
+        description: 'Filter by job number. Accepts "Job-500", "500", etc. Returns time entries across all phases of the job. (for: list)',
+      },
+      filterJobPhaseId: {
+        type: 'number',
+        description: 'Filter by job phase (works order) ID. Get phase IDs from manage-jobs action list-phases. (for: list)',
       },
       filterDateFrom: {
         type: 'string',
-        description: 'Filter by start date (ISO 8601 format: YYYY-MM-DD)',
+        description: 'Filter by start date YYYY-MM-DD (for: list). Defaults to 12 months ago if not provided.',
       },
       filterDateTo: {
         type: 'string',
-        description: 'Filter by end date (ISO 8601 format: YYYY-MM-DD)',
+        description: 'Filter by end date YYYY-MM-DD (for: list). Defaults to today if not provided.',
       },
       filterSearchText: {
         type: 'string',
-        description: 'Search text to filter time entries',
+        description: 'Search text to filter (for: list)',
       },
       filterLockedOnly: {
         type: 'boolean',
-        description: 'Filter to show only locked time entries',
+        description: 'Show only locked entries (for: list)',
       },
       pageSize: {
         type: 'number',
-        description: 'Maximum number of time entries to return per page',
+        description: 'Max results per page (for: list, default: 50)',
         default: 50,
       },
       sortField: {
         type: 'string',
-        description: 'Field to sort by',
+        description: 'Field to sort by (for: list)',
       },
       sortOrder: {
         type: 'string',
-        description: 'Sort order: asc or desc',
+        description: 'Sort order: asc or desc (for: list)',
         enum: ['asc', 'desc'],
       },
       pageCursor: {
         type: 'string',
-        description: 'Pagination cursor for next page',
+        description: 'Pagination cursor (for: list)',
       },
     },
+    required: ['action'],
   },
 };
 
-export async function handleListTimeEntries(
+export async function handleManageTimeEntries(
   fergusClient: FergusClient,
-  args: {
-    filterUserId?: string;
-    filterJobNo?: string;
-    filterDateFrom?: string;
-    filterDateTo?: string;
-    filterSearchText?: string;
-    filterLockedOnly?: boolean;
-    pageSize?: number;
-    sortField?: string;
-    sortOrder?: string;
-    pageCursor?: string;
+  args: Record<string, any>
+) {
+  switch (args.action) {
+    case 'list':
+      return handleListTimeEntries(fergusClient, args);
+    default:
+      throw new Error(`Unknown action: ${args.action}. Valid actions: list`);
   }
+}
+
+// ===== LIST TIME ENTRIES =====
+
+async function handleListTimeEntries(
+  fergusClient: FergusClient,
+  args: Record<string, any>
 ) {
   const {
     filterUserId,
-    filterJobNo,
+    filterJob,
+    filterJobPhaseId,
     filterDateFrom,
     filterDateTo,
     filterSearchText,
@@ -130,30 +102,51 @@ export async function handleListTimeEntries(
     sortField,
     sortOrder,
     pageCursor,
-  } = args || {};
+  } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
 
+  // Extract job number and pass directly to filterJobNo
+  // The time entries API does exact match on internal_job_id (user-facing number)
+  if (filterJob) {
+    const jobNo = extractJobNo(String(filterJob));
+    if (!jobNo) {
+      throw new Error(`Cannot parse job reference: "${filterJob}". Use a job number like "500" or "Job-500".`);
+    }
+    params.append('filterJobNo', jobNo);
+  }
+
+  if (filterJobPhaseId) params.append('filterJobPhaseId', filterJobPhaseId.toString());
   if (filterUserId) params.append('filterUserId', filterUserId);
-  if (filterJobNo) params.append('filterJobNo', filterJobNo);
-  if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
-  if (filterDateTo) params.append('filterDateTo', filterDateTo);
+
+  // The API defaults to last week only if dates aren't provided.
+  // Send a wide range so results aren't silently hidden.
+  if (filterDateFrom && filterDateTo) {
+    params.append('filterDateFrom', filterDateFrom);
+    params.append('filterDateTo', filterDateTo);
+  } else if (filterDateFrom) {
+    params.append('filterDateFrom', filterDateFrom);
+    params.append('filterDateTo', new Date().toISOString().slice(0, 10));
+  } else if (filterDateTo) {
+    params.append('filterDateFrom', '2020-01-01');
+    params.append('filterDateTo', filterDateTo);
+  } else {
+    // Default to last 12 months instead of the API's default of last week
+    const now = new Date();
+    const yearAgo = new Date(now);
+    yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+    params.append('filterDateFrom', yearAgo.toISOString().slice(0, 10));
+    params.append('filterDateTo', now.toISOString().slice(0, 10));
+  }
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
   if (filterLockedOnly !== undefined) params.append('filterLockedOnly', filterLockedOnly.toString());
   if (sortField) params.append('sortField', sortField);
   if (sortOrder) params.append('sortOrder', sortOrder);
   if (pageCursor) params.append('pageCursor', pageCursor);
 
-  const endpoint = `/timeEntries?${params.toString()}`;
-  const timeEntries = await fergusClient.get(endpoint);
-
+  const timeEntries = await fergusClient.get(`/timeEntries?${params.toString()}`);
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(timeEntries, null, 2),
-      },
-    ],
+    content: [{ type: 'text' as const, text: JSON.stringify(timeEntries, null, 2) }],
   };
 }

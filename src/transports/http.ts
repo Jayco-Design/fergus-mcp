@@ -31,6 +31,22 @@ interface OAuthStateData {
 }
 const oauthStates = new Map<string, OAuthStateData>();
 
+function normalizeAcceptHeader(req: Request, requiredMediaTypes: string[]): void {
+  const currentAccept = req.headers.accept;
+  const mediaTypes = new Set(
+    (Array.isArray(currentAccept) ? currentAccept.join(',') : currentAccept ?? '')
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean)
+  );
+
+  for (const mediaType of requiredMediaTypes) {
+    mediaTypes.add(mediaType);
+  }
+
+  req.headers.accept = Array.from(mediaTypes).join(', ');
+}
+
 /**
  * Create and start HTTP transport server with OAuth support
  */
@@ -121,9 +137,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
    */
   const protectedResourceHandler = (req: Request, res: Response) => {
     const baseUrl = config.publicUrl || `https://${req.get('host')}`;
+    const resourcePath = req.path.endsWith('/mcp') ? '/mcp' : '';
 
     const metadata = {
-      resource: `${baseUrl}/mcp`,
+      resource: `${baseUrl}${resourcePath}`,
       authorization_servers: [baseUrl],
       bearer_methods_supported: ['header'],
       resource_documentation: baseUrl,
@@ -379,10 +396,11 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
     }
   });
 
-  /**
-   * POST /mcp - Handle MCP requests with OAuth authentication
-   */
-  app.post('/mcp', async (req: Request, res: Response) => {
+  const handleMcpPost = async (req: Request, res: Response) => {
+    // Some MCP clients omit one of the accepted streamable HTTP media types.
+    // Normalize the header so the SDK transport does not reject otherwise-valid requests.
+    normalizeAcceptHeader(req, ['application/json', 'text/event-stream']);
+
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     const authHeader = req.headers.authorization;
     const oauthSessionId = authHeader && authHeader.startsWith('Bearer ')
@@ -501,12 +519,20 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
     // Handle the request
     await transport.handleRequest(req, res, req.body);
-  });
+  };
 
   /**
-   * GET /mcp - Handle SSE notifications or preflight checks
+   * POST / and /mcp - Handle MCP requests with OAuth authentication
    */
-  app.get('/mcp', async (req: Request, res: Response) => {
+  app.post('/', handleMcpPost);
+  app.post('/mcp', handleMcpPost);
+
+  /**
+   * GET / and /mcp - Handle SSE notifications or preflight checks
+   */
+  const handleMcpGet = async (req: Request, res: Response) => {
+    normalizeAcceptHeader(req, ['text/event-stream']);
+
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     const authHeader = req.headers.authorization;
     const oauthSessionId = authHeader && authHeader.startsWith('Bearer ')
@@ -544,12 +570,15 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
     sessionManager.updateLastAccessed(resolvedSessionId);
     await session.transport.handleRequest(req, res);
-  });
+  };
+
+  app.get('/', handleMcpGet);
+  app.get('/mcp', handleMcpGet);
 
   /**
-   * DELETE /mcp - Handle session termination
+   * DELETE / and /mcp - Handle session termination
    */
-  app.delete('/mcp', async (req: Request, res: Response) => {
+  const handleMcpDelete = async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     const authHeader = req.headers.authorization;
     const oauthSessionId = authHeader && authHeader.startsWith('Bearer ')
@@ -577,7 +606,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
     sessionManager.deleteSession(resolvedSessionId);
     res.status(200).send('Session deleted');
-  });
+  };
+
+  app.delete('/', handleMcpDelete);
+  app.delete('/mcp', handleMcpDelete);
 
   // Cleanup: periodically clean up expired OAuth states
   setInterval(() => {
