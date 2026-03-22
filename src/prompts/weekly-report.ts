@@ -21,7 +21,6 @@ export const weeklyReportPromptDefinition = {
 };
 
 export function getWeeklyReportPrompt(args?: { dateFrom?: string; dateTo?: string }) {
-  // Default to current week if no dates provided
   const today = new Date();
   const defaultDateTo = today.toISOString().split('T')[0];
   const weekAgo = new Date(today);
@@ -44,93 +43,101 @@ export function getWeeklyReportPrompt(args?: { dateFrom?: string; dateTo?: strin
         role: 'assistant' as const,
         content: {
           type: 'text' as const,
-          text: `I'll help you generate a comprehensive job status report for ${dateFrom} to ${dateTo}. Here's what I'll analyze:
+          text: `I'll generate a comprehensive job status report for ${dateFrom} to ${dateTo}.
+
+## Data Collection
+
+### 1. Active Jobs
+Use \`manage-jobs\` with action \`list\`:
+- \`filterStatus: "Active"\` to get all active jobs
+- \`pageSize: 100\`, \`sortField: "lastModified"\`, \`sortOrder: "desc"\`
+- Page through results if needed
+
+Cross-reference with \`filterCreatedAfter: "${dateFrom}"\` to identify new jobs created in the period.
+
+### 2. Quotes
+Use \`manage-quotes\` with action \`list-all\`:
+- \`modifiedAfter: "${dateFrom}"\` to get quotes touched in the period
+- \`pageSize: 50\`, page through results
+- Group by status: draft, sent, accepted, declined, voided
+
+For accepted quotes, note the total value — this is won revenue.
+
+### 3. Time Entries
+Use \`manage-time-entries\` with action \`list\`:
+- \`filterDateFrom: "${dateFrom}"\`
+- \`filterDateTo: "${dateTo}"\`
+- \`pageSize: 200\`
+
+Aggregate by:
+- Total hours across all jobs
+- Hours per job (top 10 by hours)
+- Hours per team member
+- Locked vs unlocked entries
+
+### 4. Team Members
+Use \`manage-users\` with action \`list\` and \`filterStatus: "active"\` to get team member names for cross-referencing with time entries.
+
+### 5. Invoices (if relevant)
+Use \`manage-invoices\` with action \`list\`:
+- \`dueAfter: "${dateFrom}"\`, \`dueBefore: "${dateTo}"\`
+- Check for overdue invoices (due date < today, not paid)
 
 ## Report Structure
 
-### 1. Job Overview
-- **Active Jobs**: List all active jobs
-- **Job Status Breakdown**: Count by status
-- **New Jobs**: Jobs created during this period
+### Job Summary
+| Metric | Count |
+|--------|-------|
+| Active Jobs | |
+| New Jobs Created | |
+| Jobs Completed | |
 
-### 2. Quote Analysis
-- **Pending Quotes**: Quotes awaiting customer response
-- **Accepted Quotes**: Quotes approved in this period
-- **Quote Value**: Total value of quotes issued
-- **Conversion Rate**: Accepted vs total quotes
+### Job Status Breakdown
+| Status | Count |
+|--------|-------|
+| To Price | |
+| Quote Sent | |
+| In Progress | |
+| To Invoice | |
+| Completed | |
 
-### 3. Time Tracking
-- **Total Hours**: Hours logged across all jobs
-- **By Job**: Time breakdown per job
-- **By User**: Team member productivity
-- **Locked Entries**: Finalized time entries
+### Quotes
+| Status | Count | Total Value |
+|--------|-------|-------------|
+| Draft | | |
+| Sent | | |
+| Accepted | | |
+| Declined | | |
+| Conversion Rate | | (Accepted / Sent) |
 
-### 4. Key Metrics
-- **Jobs Completed**: Finished in this period
-- **Revenue Potential**: Value of accepted quotes
-- **Team Utilization**: Hours logged vs available
+### Time Tracking
+| Metric | Value |
+|--------|-------|
+| Total Hours | |
+| Locked Entries | |
 
-## Data Collection Steps:
+**Top Jobs by Hours**
+| Job | Title | Hours |
+|-----|-------|-------|
 
-1. **List Active Jobs**
-   - Use \`list-jobs\` to get all active jobs
-   - Filter or analyze for the date range
+**Team Productivity**
+| Team Member | Hours | Jobs |
+|-------------|-------|------|
 
-2. **Analyze Quotes**
-   - Use \`list-quotes\` with \`createdAfter\` and \`modifiedAfter\` filters
-   - Group by status (pending, accepted, declined)
-   - Calculate total quote values
+### Financial Highlights
+- Revenue from accepted quotes
+- Outstanding invoices
+- Overdue invoices (if any)
 
-3. **Time Entry Summary**
-   - Use \`list-time-entries\` with \`filterDateFrom\` and \`filterDateTo\`
-   - Aggregate by job and user
-   - Identify locked (finalized) entries
+## Tools Used
+- \`manage-jobs\` action \`list\`: Job overview and status counts
+- \`manage-quotes\` action \`list-all\`: Quote pipeline and values
+- \`manage-time-entries\` action \`list\`: Hours logged
+- \`manage-users\` action \`list\`: Team member details
+- \`manage-invoices\` action \`list\`: Invoice status
+- \`manage-jobs\` action \`get\`: Individual job details as needed
 
-4. **Team Analysis**
-   - Use \`list-users\` to get active team members
-   - Cross-reference with time entries
-   - Calculate utilization rates
-
-## Report Format:
-
-\`\`\`
-📊 Fergus Job Report: ${dateFrom} to ${dateTo}
-
-JOBS SUMMARY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Active Jobs:        [count]
-New Jobs Created:   [count]
-Jobs Completed:     [count]
-
-QUOTES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Pending:           [count] ($[value])
-Accepted:          [count] ($[value])
-Conversion Rate:   [percentage]%
-
-TIME TRACKING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Total Hours:       [hours]
-Locked Entries:    [count]
-
-TOP JOBS BY HOURS
-1. [Job Title] - [hours]h
-2. [Job Title] - [hours]h
-3. [Job Title] - [hours]h
-
-TEAM PRODUCTIVITY
-[User Name]:       [hours]h
-[User Name]:       [hours]h
-\`\`\`
-
-## Tools I'll Use:
-- \`list-jobs\`: Get job overview
-- \`list-quotes\`: Analyze quote status and values
-- \`list-time-entries\`: Track hours worked
-- \`list-users\`: Get team member details
-- \`get-job\`: Fetch specific job details as needed
-
-Let me start gathering this data. I'll fetch the jobs, quotes, and time entries for your specified period.`,
+Let me start gathering data for the ${dateFrom} to ${dateTo} period.`,
         },
       },
     ],

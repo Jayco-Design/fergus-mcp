@@ -49,6 +49,7 @@ export function getRevenuePipelineSummaryPrompt(args: { dateFrom?: string; dateT
    - Note accepted quotes within range for revenue recognition.
 4. Cross-reference customers/jobs for context by calling \`manage-jobs\` with action \`get\` or \`manage-customers\` with action \`get\` when a quote stands out (> configurable threshold such as \$10k) so you can mention the client and job name in the summary.
 5. Surface any quotes approaching expiry (compare due dates vs today) and recommend next actions.
+6. Note declined and voided quotes separately — these represent lost pipeline. Include decline reasons (\`reasonNotes\`) where available to identify patterns.
 
 ## Output Expectations
 - Provide a headline metrics table: total value by status, counts, and conversion rate (Accepted / Sent).

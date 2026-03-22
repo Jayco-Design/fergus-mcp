@@ -23,6 +23,7 @@ export const manageEnquiriesToolDefinition = {
       // list params
       filterStatus: {
         type: 'string',
+        enum: ['TODO', 'CONTACTED', 'JOBCREATED', 'REJECTED'],
         description: 'Filter by enquiry status (for: list)',
       },
       filterSearchText: {
@@ -36,7 +37,8 @@ export const manageEnquiriesToolDefinition = {
       },
       sortField: {
         type: 'string',
-        description: 'Field to sort by (for: list)',
+        enum: ['createdAt'],
+        description: 'Field to sort by (for: list, default: createdAt)',
       },
       sortOrder: {
         type: 'string',
@@ -57,11 +59,11 @@ export const manageEnquiriesToolDefinition = {
         description: 'Enquiry description (for: create)',
       },
       customerId: {
-        type: 'number',
+        type: 'string',
         description: 'Customer ID (for: create)',
       },
       siteId: {
-        type: 'number',
+        type: 'string',
         description: 'Site ID (for: create)',
       },
       contactName: {

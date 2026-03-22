@@ -33,7 +33,8 @@ export const manageContactsToolDefinition = {
       },
       sortField: {
         type: 'string',
-        description: 'Field to sort by (for: list)',
+        enum: ['firstName', 'lastName', 'createdAt'],
+        description: 'Field to sort by (for: list, default: createdAt)',
       },
       sortOrder: {
         type: 'string',

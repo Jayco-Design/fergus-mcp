@@ -41,7 +41,8 @@ export function getJobProgressSnapshotPrompt(args: { jobRef: string }) {
 3. Gather financial context:
    - Call \`manage-quotes\` with action \`list\` using the \`jobId\` to find associated quotes.
    - For the most relevant quote (typically the latest or Accepted), fetch detail via \`manage-quotes\` with action \`get-detail\` to surface totals and sections.
-   - Optionally call \`manage-jobs\` with action \`get-financial-summary\` for an overview.
+   - Call \`manage-jobs\` with action \`get-financial-summary\` for the overall job financial picture.
+   - For multi-phase jobs, use \`manage-jobs\` action \`get-phase-financial-summary\` for each phase to show per-phase cost breakdowns.
 4. Check delivery activity:
    - Use \`manage-time-entries\` with action \`list\` limited to the last 14 days and filter for the job number/reference to highlight recent work and who logged it.
 5. If the job has outstanding tasks or status blockers surfaced in the payloads, call \`manage-jobs\` with action \`get\` again to verify current status just before summarizing.

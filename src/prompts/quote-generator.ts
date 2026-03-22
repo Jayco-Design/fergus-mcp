@@ -108,7 +108,18 @@ A quote consists of:
 ## Tools Available:
 - \`manage-jobs\` with action \`get\`: Fetch job details to understand scope
 - \`manage-quotes\` with action \`create\`: Create the quote with sections and line items
-- \`manage-quotes\` with action \`update\`: Modify an existing quote (replaces all sections)
+- \`manage-quotes\` with action \`update\`: Modify an existing draft quote (replaces all sections)
+- \`manage-quotes\` with action \`get-totals\`: Verify calculated totals after creation
+
+## After Creating the Quote:
+The quote starts in **draft** status. The full lifecycle is:
+1. **Review**: Use \`get-totals\` to verify pricing
+2. **Publish**: Use \`manage-quotes\` action \`publish\` to lock pricing — this also finalizes the job
+3. **Send**: Use \`manage-quotes\` action \`mark-as-sent\` to record that it was sent to the customer
+4. **Customer response**:
+   - **Accept**: Use action \`accept\` with \`acceptedBy\` (supports partial section selection via \`selectedSectionIds\`)
+   - **Decline**: Use action \`decline\` with optional \`reasonNotes\` and \`rejectedBy\`
+   - **Void**: Use action \`void\` to cancel the quote entirely
 
 Let me fetch the job details for job ${jobId} so we can create an appropriate quote structure. What type of work is this quote for?`,
         },

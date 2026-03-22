@@ -33,10 +33,17 @@ import { getCompanyInfoToolDefinition, handleGetCompanyInfo } from './tools/comp
 // Prompt handlers
 import { jobCreationAssistantPromptDefinition, getJobCreationAssistantPrompt } from './prompts/job-creation-assistant.js';
 import { quoteGeneratorPromptDefinition, getQuoteGeneratorPrompt } from './prompts/quote-generator.js';
-// import { weeklyReportPromptDefinition, getWeeklyReportPrompt } from './prompts/weekly-report.js';
+import { weeklyReportPromptDefinition, getWeeklyReportPrompt } from './prompts/weekly-report.js';
 import { quoteDetailFinderPromptDefinition, getQuoteDetailFinderPrompt } from './prompts/quote-detail-finder.js';
 import { jobProgressSnapshotPromptDefinition, getJobProgressSnapshotPrompt } from './prompts/job-progress-snapshot.js';
 import { revenuePipelineSummaryPromptDefinition, getRevenuePipelineSummaryPrompt } from './prompts/revenue-pipeline-summary.js';
+import { fergusDomainGuidePromptDefinition, getFergusDomainGuidePrompt } from './prompts/fergus-domain-guide.js';
+import { enquiryTriagePromptDefinition, getEnquiryTriagePrompt } from './prompts/enquiry-triage.js';
+import { customerSiteLookupPromptDefinition, getCustomerSiteLookupPrompt } from './prompts/customer-site-lookup.js';
+import { teamTimesheetSummaryPromptDefinition, getTeamTimesheetSummaryPrompt } from './prompts/team-timesheet-summary.js';
+import { invoiceStatusCheckPromptDefinition, getInvoiceStatusCheckPrompt } from './prompts/invoice-status-check.js';
+import { pricebookQuoteBuilderPromptDefinition, getPricebookQuoteBuilderPrompt } from './prompts/pricebook-quote-builder.js';
+import { stockCheckPromptDefinition, getStockCheckPrompt } from './prompts/stock-check.js';
 
 // MCP resources
 import { registerResources } from './resources/index.js';
@@ -116,12 +123,19 @@ export function createMcpServer(fergusClient: FergusClient): Server {
   server.setRequestHandler(ListPromptsRequestSchema, async () => {
     return {
       prompts: [
+        fergusDomainGuidePromptDefinition,
         jobCreationAssistantPromptDefinition,
         quoteGeneratorPromptDefinition,
-        // weeklyReportPromptDefinition,
+        weeklyReportPromptDefinition,
         quoteDetailFinderPromptDefinition,
         jobProgressSnapshotPromptDefinition,
         revenuePipelineSummaryPromptDefinition,
+        enquiryTriagePromptDefinition,
+        customerSiteLookupPromptDefinition,
+        teamTimesheetSummaryPromptDefinition,
+        invoiceStatusCheckPromptDefinition,
+        pricebookQuoteBuilderPromptDefinition,
+        stockCheckPromptDefinition,
       ],
     };
   });
@@ -132,6 +146,9 @@ export function createMcpServer(fergusClient: FergusClient): Server {
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     switch (name) {
+      case 'fergus-domain-guide':
+        return getFergusDomainGuidePrompt();
+
       case 'job-creation-assistant':
         return getJobCreationAssistantPrompt(args as { jobType?: string });
 
@@ -141,8 +158,8 @@ export function createMcpServer(fergusClient: FergusClient): Server {
         }
         return getQuoteGeneratorPrompt(args as { jobId: string });
 
-      // case 'weekly-report':
-      //   return getWeeklyReportPrompt(args as { dateFrom?: string; dateTo?: string });
+      case 'weekly-report':
+        return getWeeklyReportPrompt(args as { dateFrom?: string; dateTo?: string });
 
       case 'quote-detail-finder':
         if (!args?.searchTerm) {
@@ -158,6 +175,33 @@ export function createMcpServer(fergusClient: FergusClient): Server {
 
       case 'revenue-pipeline-summary':
         return getRevenuePipelineSummaryPrompt(args as { dateFrom?: string; dateTo?: string });
+
+      case 'enquiry-triage':
+        return getEnquiryTriagePrompt(args as { enquiryId?: string });
+
+      case 'customer-site-lookup':
+        if (!args?.searchTerm) {
+          throw new Error('searchTerm is required for customer-site-lookup prompt');
+        }
+        return getCustomerSiteLookupPrompt(args as { searchTerm: string });
+
+      case 'team-timesheet-summary':
+        return getTeamTimesheetSummaryPrompt(args as { dateFrom?: string; dateTo?: string; userId?: string });
+
+      case 'invoice-status-check':
+        if (!args?.searchTerm) {
+          throw new Error('searchTerm is required for invoice-status-check prompt');
+        }
+        return getInvoiceStatusCheckPrompt(args as { searchTerm: string });
+
+      case 'pricebook-quote-builder':
+        if (!args?.jobId) {
+          throw new Error('jobId is required for pricebook-quote-builder prompt');
+        }
+        return getPricebookQuoteBuilderPrompt(args as { jobId: string; searchTerms?: string });
+
+      case 'stock-check':
+        return getStockCheckPrompt(args as { jobRef?: string });
 
       default:
         throw new Error(`Unknown prompt: ${name}`);

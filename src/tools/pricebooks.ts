@@ -28,7 +28,7 @@ export const managePricebooksToolDefinition = {
         description: 'Pricebook item ID (required for: get-item)',
       },
       // list/search params
-      searchText: {
+      search: {
         type: 'string',
         description: 'Search text, min 3 chars. Searches name, productCode, supplierSku. (required for: search)',
       },
@@ -118,10 +118,10 @@ async function handleGetPricebookItem(fergusClient: FergusClient, args: Record<s
 }
 
 async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<string, any>) {
-  const { searchText, pricingTierId, allSuppliers, supplierIds, pageSize = 50, pageCursor } = args;
-  if (!searchText) throw new Error('searchText is required for search action');
+  const { search, pricingTierId, allSuppliers, supplierIds, pageSize = 50, pageCursor } = args;
+  if (!search) throw new Error('search is required for search action');
 
-  const requestBody: any = { search: searchText };
+  const requestBody: any = { search };
   if (pricingTierId !== undefined) requestBody.pricingTierId = pricingTierId;
   if (allSuppliers !== undefined) requestBody.allSuppliers = allSuppliers;
   if (supplierIds) requestBody.supplierIds = supplierIds;

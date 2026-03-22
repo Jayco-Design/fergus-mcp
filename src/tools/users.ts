@@ -29,8 +29,8 @@ export const manageUsersToolDefinition = {
       },
       pageSize: {
         type: 'number',
-        description: 'Max results per page (for: list, default: 10)',
-        default: 10,
+        description: 'Max results per page (for: list, default: 50)',
+        default: 50,
       },
       sortField: {
         type: 'string',

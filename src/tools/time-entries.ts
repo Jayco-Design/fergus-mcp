@@ -25,12 +25,12 @@ export const manageTimeEntriesToolDefinition = {
         type: 'string',
         description: 'Filter by user ID (for: list)',
       },
-      filterJob: {
+      filterJobNo: {
         type: 'string',
         description: 'Filter by job number. Accepts "Job-500", "500", etc. Returns time entries across all phases of the job. (for: list)',
       },
       filterJobPhaseId: {
-        type: 'number',
+        type: 'string',
         description: 'Filter by job phase (works order) ID. Get phase IDs from manage-jobs action list-phases. (for: list)',
       },
       filterDateFrom: {
@@ -56,7 +56,8 @@ export const manageTimeEntriesToolDefinition = {
       },
       sortField: {
         type: 'string',
-        description: 'Field to sort by (for: list)',
+        enum: ['timeEntryDate', 'jobNo', 'user'],
+        description: 'Field to sort by (for: list, default: timeEntryDate)',
       },
       sortOrder: {
         type: 'string',
@@ -92,7 +93,7 @@ async function handleListTimeEntries(
 ) {
   const {
     filterUserId,
-    filterJob,
+    filterJobNo: filterJob,
     filterJobPhaseId,
     filterDateFrom,
     filterDateTo,

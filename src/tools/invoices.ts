@@ -24,11 +24,11 @@ export const manageInvoicesToolDefinition = {
         description: 'Invoice ID (required for: get)',
       },
       customerId: {
-        type: 'number',
+        type: 'string',
         description: 'Filter by customer ID (for: list)',
       },
       jobId: {
-        type: 'number',
+        type: 'string',
         description: 'Filter by job ID (for: list)',
       },
       invoiceNumber: {
@@ -50,7 +50,8 @@ export const manageInvoicesToolDefinition = {
       },
       sortField: {
         type: 'string',
-        description: 'Field to sort by (for: list)',
+        enum: ['id', 'createdAt', 'dueDate'],
+        description: 'Field to sort by (for: list, default: createdAt)',
       },
       sortOrder: {
         type: 'string',
