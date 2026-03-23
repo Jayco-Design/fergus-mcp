@@ -1,6 +1,6 @@
 /**
  * Site Tools (consolidated)
- * manage-sites: get, list, create, update
+ * manage-sites: get, list, create, update, archive, restore
  */
 
 import { FergusClient } from '../fergus-client.js';
@@ -8,18 +8,18 @@ import { addressSchema, contactSchema } from './schemas.js';
 
 export const manageSitesToolDefinition = {
   name: 'manage-sites',
-  description: 'Manage sites. Actions: get, list, create, update',
+  description: 'Manage sites. Actions: get, list, create, update, archive, restore',
   inputSchema: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['get', 'list', 'create', 'update'],
+        enum: ['get', 'list', 'create', 'update', 'archive', 'restore'],
         description: 'The action to perform',
       },
       siteId: {
         type: 'string',
-        description: 'Site ID (required for: get, update)',
+        description: 'Site ID (required for: get, update, archive, restore)',
       },
       // list params
       filterSearchText: {
@@ -99,8 +99,12 @@ export async function handleManageSites(
       return handleCreateSite(fergusClient, args);
     case 'update':
       return handleUpdateSite(fergusClient, args);
+    case 'archive':
+      return handleArchiveSite(fergusClient, args);
+    case 'restore':
+      return handleRestoreSite(fergusClient, args);
     default:
-      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update`);
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update, archive, restore`);
   }
 }
 
@@ -222,5 +226,39 @@ async function handleUpdateSite(
   const site = await fergusClient.patch(`/sites/${siteId}`, requestBody);
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(site, null, 2) }],
+  };
+}
+
+// ===== ARCHIVE SITE =====
+
+async function handleArchiveSite(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { siteId } = args;
+  if (!siteId) {
+    throw new Error('siteId is required for archive action');
+  }
+
+  const result = await fergusClient.post(`/sites/${siteId}/archive`, {});
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result ?? { success: true }, null, 2) }],
+  };
+}
+
+// ===== RESTORE SITE =====
+
+async function handleRestoreSite(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { siteId } = args;
+  if (!siteId) {
+    throw new Error('siteId is required for restore action');
+  }
+
+  const result = await fergusClient.post(`/sites/${siteId}/restore`, {});
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
   };
 }

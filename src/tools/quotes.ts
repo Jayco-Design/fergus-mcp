@@ -1,6 +1,6 @@
 /**
  * Quote Tools (consolidated)
- * manage-quotes: get, get-by-guid, get-detail, list, list-all, create, update, update-version, get-totals, accept
+ * manage-quotes: get, get-by-guid, get-detail, list, list-all, create, update, update-version, get-totals, accept, publish, mark-as-sent, decline, void
  */
 
 import { FergusClient } from '../fergus-client.js';
@@ -73,13 +73,13 @@ const sectionsSchema = {
 
 export const manageQuotesToolDefinition = {
   name: 'manage-quotes',
-  description: 'Manage quotes. Actions: get, get-by-guid, get-detail, list (per job), list-all (across jobs), create, update, update-version, get-totals, accept. The wrapper preserves title/description on updates. Only draft quotes can be updated.',
+  description: 'Manage quotes. Actions: get, get-by-guid, get-detail, list (per job), list-all (across jobs), create, update, update-version, get-totals, accept, publish, mark-as-sent, decline, void. The wrapper preserves title/description on updates. Only draft quotes can be updated.',
   inputSchema: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['get', 'get-by-guid', 'get-detail', 'list', 'list-all', 'create', 'update', 'update-version', 'get-totals', 'accept'],
+        enum: ['get', 'get-by-guid', 'get-detail', 'list', 'list-all', 'create', 'update', 'update-version', 'get-totals', 'accept', 'publish', 'mark-as-sent', 'decline', 'void'],
         description: 'The action to perform.',
       },
       quoteId: {
@@ -166,6 +166,38 @@ export const manageQuotesToolDefinition = {
         type: 'string',
         description: 'Acceptance timestamp in ISO 8601 format. (for: accept)',
       },
+      // publish params
+      publishedAt: {
+        type: 'string',
+        description: 'Publish timestamp in ISO 8601 format. (for: publish)',
+      },
+      publishedBy: {
+        type: 'string',
+        description: 'Name or employee GUID of the person publishing. (for: publish)',
+      },
+      // mark-as-sent params
+      isSent: {
+        type: 'boolean',
+        description: 'Whether the quote has been sent. (for: mark-as-sent)',
+      },
+      // decline params
+      declinedAt: {
+        type: 'string',
+        description: 'Decline timestamp in ISO 8601 format. (for: decline)',
+      },
+      reasonNotes: {
+        type: 'string',
+        description: 'Reason for declining. (for: decline)',
+      },
+      rejectedBy: {
+        type: 'string',
+        description: 'Name or employee GUID of the person declining. (for: decline)',
+      },
+      // void params
+      voidedAt: {
+        type: 'string',
+        description: 'Void timestamp in ISO 8601 format. (for: void)',
+      },
     },
     required: ['action'],
   },
@@ -196,8 +228,16 @@ export async function handleManageQuotes(
       return handleGetQuoteTotals(fergusClient, args);
     case 'accept':
       return handleAcceptQuote(fergusClient, args);
+    case 'publish':
+      return handlePublishQuote(fergusClient, args);
+    case 'mark-as-sent':
+      return handleMarkQuoteAsSent(fergusClient, args);
+    case 'decline':
+      return handleDeclineQuote(fergusClient, args);
+    case 'void':
+      return handleVoidQuote(fergusClient, args);
     default:
-      throw new Error(`Unknown action: ${args.action}. Valid actions: get, get-by-guid, get-detail, list, list-all, create, update, update-version, get-totals, accept`);
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, get-by-guid, get-detail, list, list-all, create, update, update-version, get-totals, accept, publish, mark-as-sent, decline, void`);
   }
 }
 
@@ -446,6 +486,89 @@ async function handleAcceptQuote(
   if (selectedSectionIds) requestBody.selectedSectionIds = selectedSectionIds;
 
   const result = await fergusClient.post(`/jobs/quotes/${quoteId}/accept`, requestBody);
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+  };
+}
+
+// ===== PUBLISH QUOTE =====
+
+async function handlePublishQuote(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { quoteId } = args;
+  if (!quoteId) {
+    throw new Error('quoteId is required for publish action');
+  }
+
+  const requestBody: Record<string, unknown> = {};
+  if (args.publishedAt) requestBody.publishedAt = args.publishedAt;
+  if (args.publishedBy) requestBody.publishedBy = args.publishedBy;
+
+  const result = await fergusClient.post(`/jobs/quotes/${quoteId}/publish`, requestBody);
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+  };
+}
+
+// ===== MARK QUOTE AS SENT =====
+
+async function handleMarkQuoteAsSent(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { quoteId } = args;
+  if (!quoteId) {
+    throw new Error('quoteId is required for mark-as-sent action');
+  }
+
+  const requestBody: Record<string, unknown> = {};
+  if (args.isSent !== undefined) requestBody.isSent = args.isSent;
+
+  const result = await fergusClient.post(`/jobs/quotes/${quoteId}/markAsSent`, requestBody);
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+  };
+}
+
+// ===== DECLINE QUOTE =====
+
+async function handleDeclineQuote(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { quoteId } = args;
+  if (!quoteId) {
+    throw new Error('quoteId is required for decline action');
+  }
+
+  const requestBody: Record<string, unknown> = {};
+  if (args.declinedAt) requestBody.declinedAt = args.declinedAt;
+  if (args.reasonNotes) requestBody.reasonNotes = args.reasonNotes;
+  if (args.rejectedBy) requestBody.rejectedBy = args.rejectedBy;
+
+  const result = await fergusClient.post(`/jobs/quotes/${quoteId}/decline`, requestBody);
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+  };
+}
+
+// ===== VOID QUOTE =====
+
+async function handleVoidQuote(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { quoteId } = args;
+  if (!quoteId) {
+    throw new Error('quoteId is required for void action');
+  }
+
+  const requestBody: Record<string, unknown> = {};
+  if (args.voidedAt) requestBody.voidedAt = args.voidedAt;
+
+  const result = await fergusClient.post(`/jobs/quotes/${quoteId}/void`, requestBody);
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
   };

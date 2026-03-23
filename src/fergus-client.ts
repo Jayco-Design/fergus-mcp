@@ -165,8 +165,12 @@ export class FergusClient {
   /**
    * DELETE request to Fergus API
    */
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, data?: any): Promise<T> {
+    const options: RequestInit = { method: 'DELETE' };
+    if (data !== undefined) {
+      options.body = JSON.stringify(data);
+    }
+    return this.request<T>(endpoint, options);
   }
 
   /**
