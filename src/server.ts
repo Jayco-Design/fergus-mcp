@@ -24,7 +24,6 @@ import { manageInvoicesToolDefinition, handleManageInvoices } from './tools/invo
 import { manageEnquiriesToolDefinition, handleManageEnquiries } from './tools/enquiries.js';
 import { managePricebooksToolDefinition, handleManagePricebooks } from './tools/pricebooks.js';
 import { manageStockToolDefinition, handleManageStock } from './tools/stock.js';
-import { manageStockOnHandToolDefinition, handleManageStockOnHand } from './tools/stock-on-hand.js';
 import { manageCalendarEventsToolDefinition, handleManageCalendarEvents } from './tools/calendar-events.js';
 import { manageNotesToolDefinition, handleManageNotes } from './tools/notes.js';
 import { managePricingTiersToolDefinition, handleManagePricingTiers } from './tools/pricing-tiers.js';
@@ -102,7 +101,6 @@ export function createMcpServer(fergusClient: FergusClient): Server {
         manageTimeEntriesToolDefinition,
         managePricebooksToolDefinition,
         manageStockToolDefinition,
-        manageStockOnHandToolDefinition,
         manageCalendarEventsToolDefinition,
         manageNotesToolDefinition,
         managePricingTiersToolDefinition,
@@ -206,9 +204,6 @@ export function createMcpServer(fergusClient: FergusClient): Server {
 
         case 'manage-stock':
           return await handleManageStock(fergusClient, args as Record<string, any>);
-
-        case 'manage-stock-on-hand':
-          return await handleManageStockOnHand(fergusClient, args as Record<string, any>);
 
         case 'manage-calendar-events':
           return await handleManageCalendarEvents(fergusClient, args as Record<string, any>);
