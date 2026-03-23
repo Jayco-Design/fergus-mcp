@@ -32,7 +32,7 @@ export const manageJobsToolDefinition = {
       },
       jobId: {
         ...jobIdSchema,
-        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase)',
+        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase)',
       },
       // list params
       filterJobNo: {
@@ -118,11 +118,11 @@ export const manageJobsToolDefinition = {
       },
       phaseName: {
         type: 'string',
-        description: 'Phase name. (required for: create-phase)',
+        description: 'Phase name. (required for: create-phase; for: update-phase)',
       },
       phaseDescription: {
         type: 'string',
-        description: 'Phase description. (required for: create-phase)',
+        description: 'Phase description. (required for: create-phase; for: update-phase)',
       },
     },
     required: ['action'],
