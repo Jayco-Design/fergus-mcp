@@ -1,6 +1,6 @@
 /**
  * Job Tools (consolidated)
- * manage-jobs: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase
+ * manage-jobs: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary
  */
 
 import { FergusClient } from '../fergus-client.js';
@@ -21,13 +21,13 @@ const jobTypeSchema = {
 
 export const manageJobsToolDefinition = {
   name: 'manage-jobs',
-  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches.',
+  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches.',
   inputSchema: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['get', 'list', 'create', 'update', 'finalize', 'get-financial-summary', 'list-phases', 'get-phase', 'create-phase'],
+        enum: ['get', 'list', 'create', 'update', 'finalize', 'get-financial-summary', 'list-phases', 'get-phase', 'create-phase', 'update-phase', 'void-phase', 'get-phase-financial-summary'],
         description: 'The action to perform.',
       },
       jobId: {
@@ -114,7 +114,7 @@ export const manageJobsToolDefinition = {
       // phase params
       jobPhaseId: {
         type: 'string',
-        description: 'Job phase ID. (required for: get-phase)',
+        description: 'Job phase ID. (required for: get-phase, update-phase, void-phase, get-phase-financial-summary)',
       },
       phaseName: {
         type: 'string',
@@ -152,8 +152,14 @@ export async function handleManageJobs(
       return handleGetPhase(fergusClient, args);
     case 'create-phase':
       return handleCreatePhase(fergusClient, args);
+    case 'update-phase':
+      return handleUpdatePhase(fergusClient, args);
+    case 'void-phase':
+      return handleVoidPhase(fergusClient, args);
+    case 'get-phase-financial-summary':
+      return handleGetPhaseFinancialSummary(fergusClient, args);
     default:
-      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase`);
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary`);
   }
 }
 
@@ -429,6 +435,83 @@ async function handleCreatePhase(
       {
         type: 'text' as const,
         text: JSON.stringify(phase, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== UPDATE PHASE =====
+
+async function handleUpdatePhase(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { jobId: jobRef, jobPhaseId, phaseName, phaseDescription } = args;
+  if (!jobRef || !jobPhaseId) {
+    throw new Error('jobId and jobPhaseId are required for update-phase action');
+  }
+  if (!phaseName && !phaseDescription) {
+    throw new Error('At least one of phaseName or phaseDescription must be provided for update-phase action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+
+  const requestBody: any = {};
+  if (phaseName) requestBody.title = phaseName;
+  if (phaseDescription) requestBody.description = phaseDescription;
+
+  const phase = await fergusClient.put(`/jobs/${jobId}/phases/${jobPhaseId}`, requestBody);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(phase, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== VOID PHASE =====
+
+async function handleVoidPhase(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { jobId: jobRef, jobPhaseId } = args;
+  if (!jobRef || !jobPhaseId) {
+    throw new Error('jobId and jobPhaseId are required for void-phase action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const result = await fergusClient.post(`/jobs/${jobId}/phases/${jobPhaseId}/void`, {});
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+}
+
+// ===== GET PHASE FINANCIAL SUMMARY =====
+
+async function handleGetPhaseFinancialSummary(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { jobId: jobRef, jobPhaseId } = args;
+  if (!jobRef || !jobPhaseId) {
+    throw new Error('jobId and jobPhaseId are required for get-phase-financial-summary action');
+  }
+
+  const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
+  const summary = await fergusClient.get(`/jobs/${jobId}/phases/${jobPhaseId}/financialSummary`);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(summary, null, 2),
       },
     ],
   };

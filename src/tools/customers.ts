@@ -1,6 +1,6 @@
 /**
  * Customer Tools (consolidated)
- * manage-customers: get, list, create, update
+ * manage-customers: get, list, create, update, delete
  */
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -10,7 +10,7 @@ import { addressSchema, contactSchema } from './schemas.js';
 
 export const manageCustomersToolDefinition = {
   name: 'manage-customers',
-  description: 'Manage customers. Actions: get, list, create, update',
+  description: 'Manage customers. Actions: get, list, create, update, delete',
   _meta: {
     'openai/outputTemplate': 'ui://customers/customer-detail.html',
     'openai/toolInvocation/invoking': 'Loading customer data...',
@@ -21,7 +21,7 @@ export const manageCustomersToolDefinition = {
     properties: {
       action: {
         type: 'string',
-        enum: ['get', 'list', 'create', 'update'],
+        enum: ['get', 'list', 'create', 'update', 'delete'],
         description: 'The action to perform',
       },
       customerId: {
@@ -91,8 +91,10 @@ export async function handleManageCustomers(
       return handleCreateCustomer(fergusClient, args);
     case 'update':
       return handleUpdateCustomer(fergusClient, args);
+    case 'delete':
+      return handleDeleteCustomer(fergusClient, args);
     default:
-      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update`);
+      throw new Error(`Unknown action: ${args.action}. Valid actions: get, list, create, update, delete`);
   }
 }
 
@@ -224,5 +226,22 @@ async function handleUpdateCustomer(
   const customer = await fergusClient.put(`/customers/${customerId}`, requestBody);
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(customer, null, 2) }],
+  };
+}
+
+// ===== DELETE CUSTOMER =====
+
+async function handleDeleteCustomer(
+  fergusClient: FergusClient,
+  args: Record<string, any>
+) {
+  const { customerId } = args;
+  if (!customerId) {
+    throw new Error('customerId is required for delete action');
+  }
+
+  const result = await fergusClient.delete(`/customers/${customerId}`);
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(result ?? { success: true }, null, 2) }],
   };
 }
