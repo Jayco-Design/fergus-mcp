@@ -70,12 +70,12 @@ export const manageCalendarEventsToolDefinition = {
       },
       userId: {
         type: 'number',
-        description: 'User ID to assign the event to (for: create, update)',
+        description: 'User ID to assign the event to. Use this for single-user events — this is the primary way to assign someone to an event. (for: create, update)',
       },
       linkedUserIds: {
         type: 'array',
         items: { type: 'number' },
-        description: 'Array of user IDs to assign to a group event (for: create, update)',
+        description: 'Array of user IDs for group events only (assigns the same event to multiple people). For assigning a single user, use userId instead. (for: create, update)',
       },
       jobId: {
         type: 'number',
