@@ -11,21 +11,55 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that in
 - 🔄 Real-time data synchronization with Fergus API
 - 💬 Built-in prompts for common workflows
 
-## Installation
+## Transport Modes
 
 This server supports two transport modes:
-- **Stdio Transport**: For local use with Claude Desktop (local mode)
-- **HTTP Transport**: For remote use with Claude Web or Claude Desktop (remote mode)
 
-### Option 1: Local Mode (Stdio) - Claude Desktop
+- **Stdio (Local)**: The AI client (Claude Code, Claude Desktop) spawns the MCP server as a local child process on your machine. Communication happens over stdin/stdout pipes. Because the client and server run under the same user account, **no MCP-level authentication is needed** — you just provide your Fergus API token so the server can call the Fergus API on your behalf.
 
-The easiest way to use this MCP server locally with Claude Desktop:
+- **HTTP (Remote)**: The MCP server runs on a remote host and clients connect over the network. Because the server is exposed to the internet, **OAuth 2.0 is used to authenticate clients** before they can access Fergus resources. Once authenticated, the server manages Fergus API access through the OAuth session.
+
+## Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18+)
+- [pnpm](https://pnpm.io/)
+- [tsx](https://github.com/privatenumber/tsx) installed globally:
+  ```bash
+  pnpm add -g tsx
+  ```
+
+### Setup
+
+1. Clone this repository
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+3. Build the project:
+   ```bash
+   pnpm run build
+   ```
+
+### Optional Configuration
+
+- `--base-url`: Override the default Fergus API base URL
+- `FERGUS_BASE_URL`: Environment variable for base URL
+
+## Configuring AI Clients
+
+### Local Mode (Stdio)
+
+A **Fergus Personal Access Token (PAT)** is required. Get yours from your Fergus account settings. This token is not for MCP authentication — it allows the server to call the Fergus API on your behalf.
+
+#### Claude Code
 
 ```bash
-claude mcp add fergus-mcp -- npx -y fergus-mcp --api-token YOUR_API_TOKEN
+claude mcp add fergus-mcp -- tsx path/to/fergus-mcp/src/index.ts --api-token YOUR_API_TOKEN
 ```
 
-Or add it manually to your Claude Desktop config:
+#### Claude Desktop
 
 **MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
@@ -34,17 +68,52 @@ Or add it manually to your Claude Desktop config:
 {
   "mcpServers": {
     "fergus": {
-      "command": "npx",
-      "args": ["-y", "fergus-mcp", "--api-token", "YOUR_API_TOKEN"]
+      "command": "tsx",
+      "args": ["path/to/fergus-mcp/src/index.ts", "--api-token", "YOUR_API_TOKEN"]
     }
   }
 }
 ```
 
-### Option 2: Remote Mode (HTTP) - Remote Clients
+#### Other AI Clients (Generic)
+
+Add this configuration to your client’s MCP connector settings:
+
+```json
+{
+  "command": "tsx",
+  "args": ["path/to/fergus-mcp/src/index.ts", "--api-token", "YOUR_API_TOKEN"]
+}
+```
+
+You can also provide the token via a `.env` file instead:
+
+```env
+FERGUS_API_TOKEN=your_fergus_api_token_here
+```
+
+### Remote Mode (HTTP)
+
+The MCP server must be hosted and configured with **OAuth 2.0 credentials** so clients can authenticate. Configure these in `.env` on your server:
+
+```env
+# Required OAuth Configuration
+COGNITO_USER_POOL_ID=us-east-1-xxxxx
+COGNITO_CLIENT_ID=your_client_id
+COGNITO_CLIENT_SECRET=your_client_secret
+COGNITO_REGION=us-east-1
+COGNITO_DOMAIN=auth.fergus.com
+OAUTH_REDIRECT_URI=https://your-domain.com/oauth/callback
+
+# Server Configuration
+HTTP_PORT=3100
+PUBLIC_URL=https://your-domain.com
+```
+
+See `.env.example` for complete configuration options.
 
 Before you begin:
-- You can host your own version of this MCP server.
+- You can host your own version of this MCP server (see [Deployment](#deployment)).
 - If you just want to try things quickly, we maintain a shared test instance at `https://fergus-mcp-server.onrender.com/mcp`, but we do not guarantee it will always be available.
 
 #### Claude Web & Claude Desktop (Remote connectors)
@@ -68,76 +137,6 @@ Before you begin:
 
 > Tip: If you rotate OAuth credentials or change `PUBLIC_URL`, re-run these client setup steps so each client refreshes its metadata and tokens.
 
-### Local Development
-
-1. Clone this repository
-2. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-3. Build the project:
-   ```bash
-   pnpm run build
-   ```
-4. Run in development mode:
-
-   **HTTP mode** (for testing remote server):
-   ```bash
-   # Create .env file with OAuth credentials
-   cp .env.example .env
-   # Edit .env with your configuration
-   pnpm run dev:http
-   ```
-
-## Configuration
-
-### Stdio Mode (Local)
-
-**Personal Access Token (PAT)** is required. Get yours from your Fergus account settings.
-
-#### Option 1: Command-line argument (Recommended)
-Add this configuration to your ai client connectors settings:
-directory is basepath of fergus-mcp project.
-```json
-{
-  "command": "pnpm",
-  "args": ["--dir", "path/to/fergus-mcp", "start"],
-  "env": { "FERGUS_API_TOKEN": "YOUR_API_TOKEN" }
-}
-```
-
-#### Option 2: Environment variable
-
-Create a `.env` file:
-
-```env
-FERGUS_API_TOKEN=your_fergus_api_token_here
-```
-
-### HTTP Mode (Remote)
-
-**OAuth 2.0 credentials** are required. Configure in `.env`:
-
-```env
-# Required OAuth Configuration
-COGNITO_USER_POOL_ID=us-east-1-xxxxx
-COGNITO_CLIENT_ID=your_client_id
-COGNITO_CLIENT_SECRET=your_client_secret
-COGNITO_REGION=us-east-1
-COGNITO_DOMAIN=auth.fergus.com
-OAUTH_REDIRECT_URI=https://your-domain.com/oauth/callback
-
-# Server Configuration
-HTTP_PORT=3100
-PUBLIC_URL=https://your-domain.com
-```
-
-See `.env.example` for complete configuration options.
-
-### Optional Configuration
-
-- `--base-url`: Override the default Fergus API base URL
-- `FERGUS_BASE_URL`: Environment variable for base URL
 
 ## Available Tools
 
@@ -212,30 +211,13 @@ fergus-mcp/
 └── README.md
 ```
 
-### Building
-
-```bash
-pnpm run build
-```
-
-### Running in Dev Mode
-
-**Stdio mode:**
-```bash
-pnpm run dev -- --api-token YOUR_API_TOKEN
-```
-
-**HTTP mode:**
-```bash
-pnpm run dev:http
-```
-
 ### Scripts
 
 - `pnpm run build` - Build the project
-- `pnpm run docker:build` - build the image for docker
+- `pnpm run dev -- --api-token TOKEN` - Run stdio server in development mode
 - `pnpm run dev:http` - Run HTTP server in development mode
-- `pnpm start` - entry point for stdio
+- `pnpm run docker:build` - Build the Docker image
+- `pnpm start` - Entry point for stdio
 - `pnpm start:http` - Run built HTTP server
 
 ## Deployment
@@ -268,12 +250,13 @@ See `.env.example` for required environment variables.
 ## Security
 
 ### Stdio Mode (Local)
+- The MCP server runs as a local child process — no network exposure, no MCP-level auth required
+- The Fergus API token is passed as a config value (not for MCP auth, but so the server can call Fergus APIs)
 - Never commit your Personal Access Token to version control
 - Use environment variables or CLI arguments for configuration
-- Server runs locally and communicates directly with Fergus API
 
 ### HTTP Mode (Remote)
-- OAuth 2.0 with PKCE for secure authentication
+- OAuth 2.0 with PKCE authenticates clients to the MCP server before granting access
 - Tokens stored in-memory (optionally Redis for multi-instance deployments)
 - HTTPS required in production
 - CORS and DNS rebinding protection enabled
