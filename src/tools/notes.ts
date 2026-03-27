@@ -1,6 +1,6 @@
 /**
  * Note Tools
- * manage-notes: list
+ * manage-notes: list, create, update
  */
 
 import { FergusClient } from '../fergus-client.js';
@@ -8,18 +8,20 @@ import { resolveJobId } from './job-resolver.js';
 
 export const manageNotesToolDefinition = {
   name: 'manage-notes',
-  description: 'Manage notes. Actions: list. Notes are attached to entities (jobs, customers, quotes, sites, enquiries, invoices, job phases, tasks). Use filterEntityName + filterEntityId to scope notes, or use filterJobRef as a shortcut for job notes.',
+  description: 'Manage notes. Actions: list, create, update. Notes are attached to entities (jobs, customers, quotes, sites, enquiries, invoices, job phases, tasks). Use filterEntityName + filterEntityId to scope notes, or use filterJobRef as a shortcut for job notes.',
   annotations: {
-    readOnlyHint: true,
+    readOnlyHint: false,
   },
   inputSchema: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['list'],
+        enum: ['list', 'create', 'update'],
         description: 'The action to perform',
       },
+
+      // ── list ────────────────────────────────────────────────────────────────
       filterEntityName: {
         type: 'string',
         enum: ['JOB', 'CUSTOMER', 'CUSTOMER_INVOICE', 'QUOTE', 'SITE', 'TASK', 'ENQUIRY', 'JOB_PHASE'],
@@ -46,6 +48,35 @@ export const manageNotesToolDefinition = {
         type: 'string',
         description: 'Pagination cursor (for: list)',
       },
+
+      // ── create ──────────────────────────────────────────────────────────────
+      text: {
+        type: 'string',
+        description: 'The body text of the note (for: create, update)',
+      },
+      entityName: {
+        type: 'string',
+        enum: ['JOB', 'CUSTOMER', 'CUSTOMER_INVOICE', 'QUOTE', 'SITE', 'TASK', 'ENQUIRY', 'JOB_PHASE'],
+        description: 'The type of entity this note belongs to (for: create)',
+      },
+      entityId: {
+        type: 'number',
+        description: 'The ID of the entity this note belongs to (for: create)',
+      },
+      parentId: {
+        type: 'number',
+        description: 'Parent note ID to create a reply. Omit for a top-level note. (for: create)',
+      },
+      isPinned: {
+        type: 'boolean',
+        description: 'Pin the note. Defaults to false for create; toggles pin status for update. (for: create, update)',
+      },
+
+      // ── update ──────────────────────────────────────────────────────────────
+      noteId: {
+        type: 'number',
+        description: 'The ID of the note to update (for: update)',
+      },
     },
     required: ['action'],
   },
@@ -58,8 +89,12 @@ export async function handleManageNotes(
   switch (args.action) {
     case 'list':
       return handleListNotes(fergusClient, args);
+    case 'create':
+      return handleCreateNote(fergusClient, args);
+    case 'update':
+      return handleUpdateNote(fergusClient, args);
     default:
-      throw new Error(`Unknown action: ${args.action}. Valid actions: list`);
+      throw new Error(`Unknown action: ${args.action}. Valid actions: list, create, update`);
   }
 }
 
@@ -87,4 +122,39 @@ async function handleListNotes(fergusClient: FergusClient, args: Record<string, 
 
   const notes = await fergusClient.get(`/notes?${params.toString()}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(notes, null, 2) }] };
+}
+
+async function handleCreateNote(fergusClient: FergusClient, args: Record<string, any>) {
+  const { text, entityName, entityId, parentId, isPinned } = args;
+
+  if (!text) throw new Error('text is required for create');
+  if (!entityName) throw new Error('entityName is required for create');
+  if (entityId === undefined || entityId === null) throw new Error('entityId is required for create');
+
+  const payload: Record<string, any> = {
+    text,
+    entityName,
+    entityId,
+    isPinned: isPinned ?? false,
+    parentId: parentId ?? null,
+  };
+
+  const note = await fergusClient.post('/notes', payload);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(note, null, 2) }] };
+}
+
+async function handleUpdateNote(fergusClient: FergusClient, args: Record<string, any>) {
+  const { noteId, text, isPinned } = args;
+
+  if (noteId === undefined || noteId === null) throw new Error('noteId is required for update');
+  if (text === undefined && isPinned === undefined) {
+    throw new Error('At least one of text or isPinned must be provided for update');
+  }
+
+  const payload: Record<string, any> = {};
+  if (text !== undefined) payload.text = text;
+  if (isPinned !== undefined) payload.isPinned = isPinned;
+
+  const note = await fergusClient.patch(`/notes/${noteId}`, payload);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(note, null, 2) }] };
 }
