@@ -214,7 +214,6 @@ fergus-mcp/
 ### Scripts
 
 - `pnpm run build` - Build the project
-- `pnpm run dev -- --api-token TOKEN` - Run stdio server in development mode
 - `pnpm run dev:http` - Run HTTP server in development mode
 - `pnpm run docker:build` - Build the Docker image
 - `pnpm start` - Entry point for stdio
