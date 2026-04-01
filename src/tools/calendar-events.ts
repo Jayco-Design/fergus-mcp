@@ -11,7 +11,7 @@ const repeatEndTypeOptions = ['NEVER', 'ON_DATE', 'AFTER'] as const;
 
 export const manageCalendarEventsToolDefinition = {
   name: 'manage-calendar-events',
-  description: 'Manage calendar events. Actions: list, get, create, update, delete. All times are stored in UTC — when querying for a local date range, offset filterDateFrom/filterDateTo to account for the company timezone (e.g. for NZDT/UTC+13, subtract 13 hours from the local start/end).',
+  description: 'Manage calendar events. Actions: list, get, create, update, delete. All times are stored in UTC — when querying for a local date range, offset filterDateFrom/filterDateTo to account for the company timezone (e.g. for NZDT/UTC+13, subtract 13 hours from the local start/end). For list: send filterDateFrom with a timezone offset (e.g. 2026-03-27T00:00:00+13:00) so the partner API computes correct day boundaries. Use filterCalendarRange to control the date window (DAY, WEEK, etc.). Note: filterDateTo is not supported by the partner API and will be ignored.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -27,11 +27,7 @@ export const manageCalendarEventsToolDefinition = {
       // list params
       filterDateFrom: {
         type: 'string',
-        description: 'Filter by start date in ISO 8601 format e.g. 2026-03-16T00:00:00Z. Must be in UTC — offset from local time as needed (for: list)',
-      },
-      filterDateTo: {
-        type: 'string',
-        description: 'Filter by end date in ISO 8601 format e.g. 2026-03-17T23:59:59Z. Must be in UTC — offset from local time as needed (for: list)',
+        description: 'Filter by start date in ISO 8601 format. Include a timezone offset for correct local date interpretation (e.g. 2026-03-27T00:00:00+13:00 for NZDT). If no offset is provided, the date is treated as UTC which may resolve to the wrong local day. Use get-company-info to find the company timezone. (for: list)',
       },
       filterUserId: {
         type: 'string',
@@ -199,7 +195,7 @@ export async function handleManageCalendarEvents(
 
 async function handleListCalendarEvents(fergusClient: FergusClient, args: Record<string, any>) {
   const {
-    filterDateFrom, filterDateTo, filterUserId, filterCalendarRange,
+    filterDateFrom, filterUserId, filterCalendarRange,
     filterCalendarEventType, filterJobId, filterJobPhaseId,
     filterJobEventsOnly, filterNonJobEventsOnly, filterUnassignedEventsOnly,
     filterActiveOnly, pageSize = 50, pageCursor,
@@ -208,7 +204,6 @@ async function handleListCalendarEvents(fergusClient: FergusClient, args: Record
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
-  if (filterDateTo) params.append('filterDateTo', filterDateTo);
   if (filterUserId) params.append('filterUserId', filterUserId);
   if (filterCalendarRange) params.append('filterCalendarRange', filterCalendarRange);
   if (filterCalendarEventType) params.append('filterCalendarEventType', filterCalendarEventType);
