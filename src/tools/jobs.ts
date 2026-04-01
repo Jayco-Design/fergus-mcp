@@ -21,7 +21,7 @@ const jobTypeSchema = {
 
 export const manageJobsToolDefinition = {
   name: 'manage-jobs',
-  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches.',
+  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches. IMPORTANT: When creating a job, always confirm jobType, customer, and site with the user before proceeding — do not infer or assume these from existing jobs or context.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -84,7 +84,7 @@ export const manageJobsToolDefinition = {
       // create/update params
       jobType: {
         ...jobTypeSchema,
-        description: 'Type of job. (required for: create; optional for: update — wrapper preserves current value)',
+        description: 'Type of job. Always ask the user which type to use — do not assume. (required for: create; optional for: update — wrapper preserves current value)',
       },
       title: {
         type: 'string',
@@ -96,11 +96,11 @@ export const manageJobsToolDefinition = {
       },
       customerId: {
         type: 'number',
-        description: 'Customer ID. Required when isDraft is false. (for: create, update)',
+        description: 'Customer ID. Always confirm with the user — do not assume from existing jobs or search results. Required when isDraft is false. (for: create, update)',
       },
       siteId: {
         type: 'number',
-        description: 'Site ID. Required when isDraft is false. (for: create, update)',
+        description: 'Site ID. Always confirm with the user — do not assume from existing jobs or search results. Required when isDraft is false. (for: create, update)',
       },
       customerReference: {
         type: 'string',
