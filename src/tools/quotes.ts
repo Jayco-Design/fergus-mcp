@@ -49,11 +49,11 @@ const quoteSectionSchema = {
           },
           salesAccountId: {
             type: 'number',
-            description: 'Sales account ID. Use either salesAccountId or isLabour, not both.',
+            description: 'Sales account ID. Required for non-labour line items — use manage-pricebooks action search to find a valid salesAccountId. Do not use together with isLabour.',
           },
           isLabour: {
             type: 'boolean',
-            description: 'Whether this is a labour item. Use either isLabour or salesAccountId, not both.',
+            description: 'Set to true for labour line items (no salesAccountId needed). Do not use together with salesAccountId.',
           },
           sortOrder: {
             type: 'number',
@@ -144,7 +144,7 @@ export const manageQuotesToolDefinition = {
       // create/update/update-version params
       sections: {
         ...sectionsSchema,
-        description: 'Array of quote sections with line items. Replaces all existing sections on update. Line items use either salesAccountId or isLabour, not both. (required for: create, update, update-version)',
+        description: 'Array of quote sections with line items. Replaces all existing sections on update. Each line item must have either salesAccountId (for materials/non-labour — look up via manage-pricebooks search) or isLabour: true (for labour), but not both. (required for: create, update, update-version)',
       },
       // update-version params
       versionNumber: {
