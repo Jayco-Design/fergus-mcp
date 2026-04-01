@@ -37,6 +37,40 @@ export const manageCalendarEventsToolDefinition = {
         type: 'string',
         description: 'Filter by user ID (for: list)',
       },
+      filterCalendarRange: {
+        type: 'string',
+        enum: ['DAY', 'THREE_DAY', 'WEEK', 'FORTNIGHT', 'MONTH'],
+        description: 'Date range period. DAY/THREE_DAY use the exact filterDateFrom date. WEEK/MONTH use the week or month containing that date (weeks run Monday–Sunday). FORTNIGHT starts at the Monday of the containing week. Defaults to WEEK. (for: list)',
+      },
+      filterCalendarEventType: {
+        type: 'string',
+        enum: ['JOB_PHASE', 'QUOTE', 'ESTIMATE', 'OTHER'],
+        description: 'Filter by event type. (for: list)',
+      },
+      filterJobId: {
+        type: 'number',
+        description: 'Filter events for a specific job. (for: list)',
+      },
+      filterJobPhaseId: {
+        type: 'number',
+        description: 'Filter events for a specific job phase. (for: list)',
+      },
+      filterJobEventsOnly: {
+        type: 'boolean',
+        description: 'Only return job-related events (JOB_PHASE, QUOTE, ESTIMATE). (for: list)',
+      },
+      filterNonJobEventsOnly: {
+        type: 'boolean',
+        description: 'Only return non-job events (OTHER). (for: list)',
+      },
+      filterUnassignedEventsOnly: {
+        type: 'boolean',
+        description: 'Only return events with no assigned user. (for: list)',
+      },
+      filterActiveOnly: {
+        type: 'boolean',
+        description: 'Only return active events. (for: list)',
+      },
       pageSize: {
         type: 'number',
         description: 'Max results per page (for: list, default: 50)',
@@ -164,13 +198,26 @@ export async function handleManageCalendarEvents(
 }
 
 async function handleListCalendarEvents(fergusClient: FergusClient, args: Record<string, any>) {
-  const { filterDateFrom, filterDateTo, filterUserId, pageSize = 50, pageCursor } = args;
+  const {
+    filterDateFrom, filterDateTo, filterUserId, filterCalendarRange,
+    filterCalendarEventType, filterJobId, filterJobPhaseId,
+    filterJobEventsOnly, filterNonJobEventsOnly, filterUnassignedEventsOnly,
+    filterActiveOnly, pageSize = 50, pageCursor,
+  } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
   if (filterDateTo) params.append('filterDateTo', filterDateTo);
   if (filterUserId) params.append('filterUserId', filterUserId);
+  if (filterCalendarRange) params.append('filterCalendarRange', filterCalendarRange);
+  if (filterCalendarEventType) params.append('filterCalendarEventType', filterCalendarEventType);
+  if (filterJobId) params.append('filterJobId', filterJobId.toString());
+  if (filterJobPhaseId) params.append('filterJobPhaseId', filterJobPhaseId.toString());
+  if (filterJobEventsOnly !== undefined) params.append('filterJobEventsOnly', filterJobEventsOnly.toString());
+  if (filterNonJobEventsOnly !== undefined) params.append('filterNonJobEventsOnly', filterNonJobEventsOnly.toString());
+  if (filterUnassignedEventsOnly !== undefined) params.append('filterUnassignedEventsOnly', filterUnassignedEventsOnly.toString());
+  if (filterActiveOnly !== undefined) params.append('filterActiveOnly', filterActiveOnly.toString());
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const events = await fergusClient.get(`/calendarEvents?${params.toString()}`);
