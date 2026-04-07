@@ -113,7 +113,8 @@ async function handleGetCustomer(
     throw new Error('customerId is required for get action');
   }
 
-  const customer = await fergusClient.get(`/customers/${customerId}`) as any;
+  const response = await fergusClient.get(`/customers/${customerId}`) as any;
+  const customer = response.data || response;
 
   const structuredCustomer = {
     id: customer.id || customer.customerId,
