@@ -15,19 +15,23 @@ export const addressSchema = {
       type: 'string',
       description: 'Address line 2',
     },
-    city: {
+    addressSuburb: {
+      type: 'string',
+      description: 'Suburb',
+    },
+    addressCity: {
       type: 'string',
       description: 'City',
     },
-    state: {
+    addressRegion: {
       type: 'string',
-      description: 'State/province',
+      description: 'State/province/region',
     },
-    postalCode: {
+    addressPostcode: {
       type: 'string',
       description: 'Postal/ZIP code',
     },
-    country: {
+    addressCountry: {
       type: 'string',
       description: 'Country',
     },
