@@ -24,7 +24,7 @@ export const manageNotesToolDefinition = {
       // ── list ────────────────────────────────────────────────────────────────
       filterEntityName: {
         type: 'string',
-        enum: ['JOB', 'CUSTOMER', 'CUSTOMER_INVOICE', 'QUOTE', 'SITE', 'TASK', 'ENQUIRY', 'JOB_PHASE'],
+        enum: ['job', 'customer', 'customer_invoice', 'quote', 'site', 'task', 'enquiry', 'job_phase'],
         description: 'Entity type to filter notes by (for: list). Use with filterEntityId.',
       },
       filterEntityId: {
@@ -33,7 +33,7 @@ export const manageNotesToolDefinition = {
       },
       filterJobRef: {
         type: 'string',
-        description: 'Shortcut: filter notes for a job by job number e.g. "503" or "Job-503". Resolves to filterEntityName=JOB + filterEntityId automatically. (for: list)',
+        description: 'Shortcut: filter notes for a job by job number e.g. "503" or "Job-503". Resolves to filterEntityName=job + filterEntityId automatically. (for: list)',
       },
       filterCreatedById: {
         type: 'number',
@@ -56,7 +56,7 @@ export const manageNotesToolDefinition = {
       },
       entityName: {
         type: 'string',
-        enum: ['JOB', 'CUSTOMER', 'CUSTOMER_INVOICE', 'QUOTE', 'SITE', 'TASK', 'ENQUIRY', 'JOB_PHASE'],
+        enum: ['job', 'customer', 'customer_invoice', 'quote', 'site', 'task', 'enquiry', 'job_phase'],
         description: 'The type of entity this note belongs to (for: create)',
       },
       entityId: {
@@ -69,7 +69,7 @@ export const manageNotesToolDefinition = {
       },
       isPinned: {
         type: 'boolean',
-        description: 'Pin the note. Defaults to false for create; toggles pin status for update. (for: create, update)',
+        description: 'Pin or unpin the note (for: update only). To pin a note on creation, first create it then call update with isPinned: true.',
       },
 
       // ── update ──────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ async function handleListNotes(fergusClient: FergusClient, args: Record<string, 
   // Shortcut: resolve job reference to entity filter
   if (filterJobRef) {
     const { id: jobId } = await resolveJobId(fergusClient, String(filterJobRef));
-    entityName = 'JOB';
+    entityName = 'job';
     entityId = jobId;
   }
 
@@ -125,17 +125,19 @@ async function handleListNotes(fergusClient: FergusClient, args: Record<string, 
 }
 
 async function handleCreateNote(fergusClient: FergusClient, args: Record<string, any>) {
-  const { text, entityName, entityId, parentId, isPinned } = args;
+  const { text, entityName, entityId, parentId } = args;
 
   if (!text) throw new Error('text is required for create');
   if (!entityName) throw new Error('entityName is required for create');
   if (entityId === undefined || entityId === null) throw new Error('entityId is required for create');
 
+  // Note: isPinned is intentionally excluded from create — the underlying API does not
+  // support pinning on creation and including it causes the text field to be silently
+  // dropped. To pin a note, create it first then call update with isPinned: true.
   const payload: Record<string, any> = {
     text,
     entityName,
     entityId,
-    isPinned: isPinned ?? false,
     parentId: parentId ?? null,
   };
 
