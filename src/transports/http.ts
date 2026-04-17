@@ -48,6 +48,20 @@ function normalizeAcceptHeader(req: Request, requiredMediaTypes: string[]): void
 }
 
 /**
+ * Checks whether the authenticated user is permitted to use this integration.
+ * Returns true if access should be granted, false otherwise.
+ */
+async function checkUserPermitted(fergusClient: FergusClient): Promise<boolean> {
+  try {
+    const response = await fergusClient.get('/users/me') as any;
+    const user = response?.data ?? response;
+    return user?.isOwner === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Create and start HTTP transport server with OAuth support
  */
 export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<void> {
@@ -454,6 +468,23 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
             tokenProvider: async () => null,
             baseUrl: config.fergusBaseUrl,
           });
+
+      // Verify the authenticated user is permitted to use this integration
+      if (oauthSessionId && tokenManager.hasTokens(oauthSessionId)) {
+        const permitted = await checkUserPermitted(fergusClient);
+        if (!permitted) {
+          console.error('[MCP] Session init rejected: user does not meet access requirements');
+          res.status(403).json({
+            jsonrpc: '2.0',
+            error: {
+              code: -32000,
+              message: 'Your account does not have access to this integration. Please contact your account administrator.',
+            },
+            id: null,
+          });
+          return;
+        }
+      }
 
       console.error(`[MCP] Initializing new session${oauthSessionId ? ` using OAuth session ${oauthSessionId}` : ' (unauthenticated discovery mode)'}`);
 
