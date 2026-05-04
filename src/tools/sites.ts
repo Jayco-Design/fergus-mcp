@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { addressSchema, contactSchema } from './schemas.js';
+import { extractNextCursor } from '../utils/format-response.js';
 
 export const manageSitesToolDefinition = {
   name: 'manage-sites',
@@ -155,7 +156,7 @@ async function handleListSites(
   const response = await fergusClient.get(`/sites?${params.toString()}`) as any;
   const sites = Array.isArray(response) ? response : (response.data || response.sites || []);
   const totalCount = response.total || response.totalCount || sites.length;
-  const nextCursor = response.nextCursor || response.pageCursor || null;
+  const nextCursor = extractNextCursor(response);
 
   const summary = `Found ${sites.length} site(s)${totalCount > sites.length ? ` of ${totalCount} total` : ''}`;
 

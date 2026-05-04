@@ -38,3 +38,15 @@ export function formatResponse(
     structuredContent,
   };
 }
+
+/**
+ * Extract the next pagination cursor from a Fergus API list response.
+ * The API returns paging as `{ paging: { links: { next: "/path?...&pageCursor=N" } } }`
+ * (next is null on the last page). Returns the cursor string or null.
+ */
+export function extractNextCursor(response: any): string | null {
+  const nextLink: string | null | undefined = response?.paging?.links?.next;
+  if (!nextLink) return null;
+  const match = nextLink.match(/[?&]pageCursor=([^&]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
