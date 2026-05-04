@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageFavouritesToolDefinition = {
   name: 'manage-favourites',
@@ -58,7 +59,7 @@ async function handleListFavourites(fergusClient: FergusClient, args: Record<str
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const favourites = await fergusClient.get(`/favourites?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(favourites, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(favourites), null, 2) }] };
 }
 
 async function handleGetFavourite(fergusClient: FergusClient, args: Record<string, any>) {

@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageInvoicesToolDefinition = {
   name: 'manage-invoices',
@@ -103,5 +104,5 @@ async function handleListInvoices(fergusClient: FergusClient, args: Record<strin
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const invoices = await fergusClient.get(`/customerInvoices?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(invoices, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(invoices), null, 2) }] };
 }

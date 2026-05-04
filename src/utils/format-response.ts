@@ -39,14 +39,54 @@ export function formatResponse(
   };
 }
 
+export interface PaginationInfo {
+  count: number;
+  perPage?: number;
+  nextCursor: string | null;
+  previousCursor: string | null;
+}
+
 /**
- * Extract the next pagination cursor from a Fergus API list response.
- * The API returns paging as `{ paging: { links: { next: "/path?...&pageCursor=N" } } }`
- * (next is null on the last page). Returns the cursor string or null.
+ * Pull the `pageCursor=N` query param out of a Fergus paging link.
+ * Returns null when the link is null/undefined or the cursor isn't present.
+ *
+ * The link may be a relative path or full URL. The API has been observed
+ * emitting duplicate `pageCursor` params on `previous`/`self` links (the
+ * original cursor is left in place and a new one is appended). Take the
+ * last occurrence, which is the effective value under normal query-string
+ * "last wins" semantics.
  */
-export function extractNextCursor(response: any): string | null {
-  const nextLink: string | null | undefined = response?.paging?.links?.next;
-  if (!nextLink) return null;
-  const match = nextLink.match(/[?&]pageCursor=([^&]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+export function extractCursor(link: string | null | undefined): string | null {
+  if (!link) return null;
+  const queryStart = link.indexOf('?');
+  if (queryStart === -1) return null;
+  const params = new URLSearchParams(link.slice(queryStart + 1));
+  const all = params.getAll('pageCursor');
+  return all.length > 0 ? all[all.length - 1] : null;
+}
+
+/**
+ * Build a unified pagination object from a Fergus list response.
+ * Fergus returns `{ data: [...], paging: { perPage, pageCount, links: { next, previous } } }`,
+ * where `links.next` (and `links.previous`) are URLs containing `pageCursor=N`,
+ * or null on the first/last page.
+ */
+export function extractPagination(response: any): PaginationInfo {
+  const items = Array.isArray(response) ? response : (response?.data ?? []);
+  const links = response?.paging?.links ?? {};
+  return {
+    count: response?.paging?.pageCount ?? (Array.isArray(items) ? items.length : 0),
+    perPage: response?.paging?.perPage,
+    nextCursor: extractCursor(links.next),
+    previousCursor: extractCursor(links.previous),
+  };
+}
+
+/**
+ * Normalize a Fergus list response into `{ data, pagination }` for use as
+ * tool output. Strips the raw `paging` field and any other top-level keys.
+ */
+export function normalizeListResponse<T = any>(response: any): { data: T[]; pagination: PaginationInfo } {
+  const data: T[] = Array.isArray(response) ? response : (response?.data ?? []);
+  return { data, pagination: extractPagination(response) };
 }

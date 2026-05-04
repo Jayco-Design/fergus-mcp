@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageEnquiriesToolDefinition = {
   name: 'manage-enquiries',
@@ -117,7 +118,7 @@ async function handleListEnquiries(fergusClient: FergusClient, args: Record<stri
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const enquiries = await fergusClient.get(`/enquiries?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(enquiries, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(enquiries), null, 2) }] };
 }
 
 async function handleCreateEnquiry(fergusClient: FergusClient, args: Record<string, any>) {

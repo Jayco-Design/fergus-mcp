@@ -5,7 +5,7 @@
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { FergusClient } from '../fergus-client.js';
-import { formatResponse, isChatGPT, extractNextCursor } from '../utils/format-response.js';
+import { formatResponse, isChatGPT, extractPagination } from '../utils/format-response.js';
 
 export const manageUsersToolDefinition = {
   name: 'manage-users',
@@ -172,8 +172,6 @@ async function handleListUsers(
 
   const response = await fergusClient.get(`/users?${params.toString()}`) as any;
   const users = Array.isArray(response) ? response : (response.data || response.users || []);
-  const totalCount = response.total || response.totalCount || users.length;
-  const nextCursor = extractNextCursor(response);
 
   const structuredUsers = users.map((user: any) => ({
     id: user.id || user.userId,
@@ -186,7 +184,7 @@ async function handleListUsers(
 
   return formatResponse({
     users: structuredUsers,
-    pagination: { count: users.length, total: totalCount, nextCursor },
+    pagination: extractPagination(response),
   }, meta);
 }
 

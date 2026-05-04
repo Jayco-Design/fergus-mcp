@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { resolveJobId } from './job-resolver.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 const quoteStatusOptions = ['draft', 'accepted', 'voided', 'superseded', 'declined', 'published', 'emailSent', 'emailNotSent'] as const;
 const quoteListSortOptions = ['id', 'versionNumber'] as const;
@@ -316,7 +317,7 @@ async function handleListQuotes(
   const endpoint = `/jobs/${jobId}/quotes?${params.toString()}`;
   const quotes = await fergusClient.get(endpoint);
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(quotes, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(quotes), null, 2) }],
   };
 }
 
@@ -339,7 +340,7 @@ async function handleListAllQuotes(
 
   const quotes = await fergusClient.get(`/jobs/quotes?${params.toString()}`);
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(quotes, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(quotes), null, 2) }],
   };
 }
 

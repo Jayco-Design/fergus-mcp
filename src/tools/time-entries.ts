@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { extractJobNo } from './job-resolver.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageTimeEntriesToolDefinition = {
   name: 'manage-time-entries',
@@ -147,6 +148,6 @@ async function handleListTimeEntries(
 
   const timeEntries = await fergusClient.get(`/timeEntries?${params.toString()}`);
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(timeEntries, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(timeEntries), null, 2) }],
   };
 }
