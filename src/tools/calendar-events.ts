@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 const eventTypeOptions = ['JOB_PHASE', 'QUOTE', 'ESTIMATE', 'OTHER'] as const;
 const frequencyOptions = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'NEVER'] as const;
@@ -216,7 +217,7 @@ async function handleListCalendarEvents(fergusClient: FergusClient, args: Record
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const events = await fergusClient.get(`/calendarEvents?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(events, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(events), null, 2) }] };
 }
 
 async function handleGetCalendarEvent(fergusClient: FergusClient, args: Record<string, any>) {

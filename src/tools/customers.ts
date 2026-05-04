@@ -5,7 +5,7 @@
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { FergusClient } from '../fergus-client.js';
-import { formatResponse, isChatGPT } from '../utils/format-response.js';
+import { formatResponse, isChatGPT, extractPagination } from '../utils/format-response.js';
 import { addressSchema, contactSchema } from './schemas.js';
 
 export const manageCustomersToolDefinition = {
@@ -157,8 +157,6 @@ async function handleListCustomers(
 
   const response = await fergusClient.get(`/customers?${params.toString()}`) as any;
   const customers = Array.isArray(response) ? response : (response.data || response.customers || []);
-  const totalCount = response.total || response.totalCount || customers.length;
-  const nextCursor = response.nextCursor || response.pageCursor || null;
 
   const structuredCustomers = customers.map((customer: any) => {
     const contactItems = customer.mainContact?.contactItems || [];
@@ -184,7 +182,7 @@ async function handleListCustomers(
 
   return formatResponse({
     customers: structuredCustomers,
-    pagination: { count: customers.length, total: totalCount, nextCursor },
+    pagination: extractPagination(response),
   }, meta);
 }
 

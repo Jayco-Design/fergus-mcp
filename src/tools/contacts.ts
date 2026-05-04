@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { contactItemSchema } from './schemas.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageContactsToolDefinition = {
   name: 'manage-contacts',
@@ -108,7 +109,7 @@ async function handleListContacts(fergusClient: FergusClient, args: Record<strin
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const contacts = await fergusClient.get(`/contacts?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(contacts, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(contacts), null, 2) }] };
 }
 
 async function handleCreateContact(fergusClient: FergusClient, args: Record<string, any>) {

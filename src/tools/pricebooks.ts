@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const managePricebooksToolDefinition = {
   name: 'manage-pricebooks',
@@ -86,7 +87,7 @@ async function handleListPricebooks(fergusClient: FergusClient, args: Record<str
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const pricebooks = await fergusClient.get(`/pricebooks?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(pricebooks, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(pricebooks), null, 2) }] };
 }
 
 async function handleGetPricebook(fergusClient: FergusClient, args: Record<string, any>) {
@@ -106,7 +107,7 @@ async function handleListPricebookItems(fergusClient: FergusClient, args: Record
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const items = await fergusClient.get(`/pricebooks/${pricebookId}/pricebookItems?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(items, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(items), null, 2) }] };
 }
 
 async function handleGetPricebookItem(fergusClient: FergusClient, args: Record<string, any>) {
@@ -131,5 +132,5 @@ async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<s
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const results = await fergusClient.post(`/pricebooks/search?${params.toString()}`, requestBody);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(results), null, 2) }] };
 }

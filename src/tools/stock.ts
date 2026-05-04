@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageStockToolDefinition = {
   name: 'manage-stock',
@@ -118,7 +119,7 @@ async function handleListStockUsed(fergusClient: FergusClient, args: Record<stri
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const stock = await fergusClient.get(`/stockUsed?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(stock, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(stock), null, 2) }] };
 }
 
 // ===== STOCK ON HAND =====
@@ -139,7 +140,7 @@ function buildStockOnHandParams(args: Record<string, any>): URLSearchParams {
 async function handleListAllStockOnHand(fergusClient: FergusClient, args: Record<string, any>) {
   const params = buildStockOnHandParams(args);
   const result = await fergusClient.get(`/phases/stockOnHand?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(result), null, 2) }] };
 }
 
 async function handleListStockOnHandByPhase(fergusClient: FergusClient, args: Record<string, any>) {
@@ -148,7 +149,7 @@ async function handleListStockOnHandByPhase(fergusClient: FergusClient, args: Re
 
   const params = buildStockOnHandParams(args);
   const result = await fergusClient.get(`/phases/${jobPhaseId}/stockOnHand?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(result), null, 2) }] };
 }
 
 async function handleCreateStockOnHand(fergusClient: FergusClient, args: Record<string, any>) {

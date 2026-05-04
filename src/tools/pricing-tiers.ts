@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const managePricingTiersToolDefinition = {
   name: 'manage-pricing-tiers',
@@ -58,7 +59,7 @@ async function handleListPricingTiers(fergusClient: FergusClient, args: Record<s
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const tiers = await fergusClient.get(`/pricingTiers?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(tiers, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(tiers), null, 2) }] };
 }
 
 async function handleGetPricingTier(fergusClient: FergusClient, args: Record<string, any>) {

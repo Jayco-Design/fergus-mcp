@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { resolveJobId } from './job-resolver.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 const jobStatusOptions = ['Active', 'Completed', 'Estimate Rejected', 'Estimate Sent', 'Inactive', 'Quote Sent', 'Quote Rejected', 'To Price'] as const;
 const jobTypeOptions = ['Quote', 'Estimate', 'Charge Up'] as const;
@@ -223,7 +224,7 @@ async function handleListJobs(
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(jobs, null, 2),
+        text: JSON.stringify(normalizeListResponse(jobs), null, 2),
       },
     ],
   };

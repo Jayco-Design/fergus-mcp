@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { resolveJobId } from './job-resolver.js';
+import { normalizeListResponse } from '../utils/format-response.js';
 
 export const manageNotesToolDefinition = {
   name: 'manage-notes',
@@ -121,7 +122,7 @@ async function handleListNotes(fergusClient: FergusClient, args: Record<string, 
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const notes = await fergusClient.get(`/notes?${params.toString()}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(notes, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(notes), null, 2) }] };
 }
 
 async function handleCreateNote(fergusClient: FergusClient, args: Record<string, any>) {
