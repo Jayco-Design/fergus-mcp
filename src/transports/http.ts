@@ -345,7 +345,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         const cognitoTokens = await tokenManager.getTokens(oldSessionId);
         if (cognitoTokens) {
           await tokenManager.storeTokens(newSessionId, cognitoTokens);
-          console.error('[OAuth] 🔄 Rotated MCP session after refresh');
+          // Rebind any live MCP session that was using the old OAuth session ID,
+          // otherwise its tokenProvider would keep referencing the soon-to-be-deleted key.
+          sessionManager.replaceOAuthSessionId(oldSessionId, newSessionId);
+          console.error('[OAuth] 🔄 Rotated OAuth session after refresh');
         }
 
         // Invalidate the old refresh token to prevent reuse
@@ -454,12 +457,22 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         return;
       }
 
+      // Generate the MCP session ID up front so the FergusClient's tokenProvider
+      // can resolve the *live* OAuth session ID on every call. This matters because
+      // /oauth/token rotates the OAuth session (new ID, old ID deleted) — without
+      // this indirection the closure would forever reference the deleted old ID.
+      const mcpSessionId = randomUUID();
+
       // Create FergusClient - use OAuth if available, otherwise null (for discovery only)
       const fergusClient = (oauthSessionId && tokenManager.hasTokens(oauthSessionId))
         ? new FergusClient({
             tokenProvider: async () => {
-              const token = await tokenManager.getAccessToken(oauthSessionId);
-              return token;
+              // After init, sessionManager owns the current OAuth session ID and is
+              // updated on rotation. Before init completes (e.g. during checkUserPermitted),
+              // fall back to the original ID captured here.
+              const liveOAuthSessionId =
+                sessionManager.getOAuthSessionId(mcpSessionId) ?? oauthSessionId;
+              return await tokenManager.getAccessToken(liveOAuthSessionId);
             },
             baseUrl: config.fergusBaseUrl,
           })
@@ -489,10 +502,8 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       console.error(`[MCP] Initializing new session${oauthSessionId ? ` using OAuth session ${oauthSessionId}` : ' (unauthenticated discovery mode)'}`);
 
       try {
-        // Generate new MCP session ID (different from OAuth session)
-        const mcpSessionId = randomUUID();
-
-        // Create transport
+        // Create transport (mcpSessionId was generated above so the tokenProvider closure
+        // could capture it).
         const newTransport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => mcpSessionId,
           onsessioninitialized: (newSessionId) => {

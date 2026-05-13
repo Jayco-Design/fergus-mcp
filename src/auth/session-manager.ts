@@ -80,6 +80,38 @@ export class SessionManager {
   }
 
   /**
+   * Returns the current OAuth session ID associated with an MCP session,
+   * or undefined if the MCP session is not yet registered or has no OAuth binding.
+   * Non-mutating: does not update lastAccessedAt or log.
+   */
+  getOAuthSessionId(mcpSessionId: string): string | undefined {
+    return this.sessions.get(mcpSessionId)?.oauthSessionId;
+  }
+
+  /**
+   * Updates the OAuth session ID bound to an MCP session after a refresh-token rotation.
+   * Returns true if a matching MCP session was found and updated.
+   */
+  replaceOAuthSessionId(oldOAuthSessionId: string, newOAuthSessionId: string): boolean {
+    const mcpSessionId = this.oauthSessionToMcpSession.get(oldOAuthSessionId);
+    if (!mcpSessionId) {
+      return false;
+    }
+    const session = this.sessions.get(mcpSessionId);
+    if (!session) {
+      this.oauthSessionToMcpSession.delete(oldOAuthSessionId);
+      return false;
+    }
+    session.oauthSessionId = newOAuthSessionId;
+    this.oauthSessionToMcpSession.delete(oldOAuthSessionId);
+    this.oauthSessionToMcpSession.set(newOAuthSessionId, mcpSessionId);
+    console.error(
+      `[SessionManager] Rebound MCP session ${mcpSessionId} from OAuth session ${oldOAuthSessionId} to ${newOAuthSessionId}`
+    );
+    return true;
+  }
+
+  /**
    * Gets session data by OAuth session ID
    */
   getSessionByOAuthSessionId(oauthSessionId: string): SessionData | null {
