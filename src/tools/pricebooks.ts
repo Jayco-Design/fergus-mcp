@@ -81,7 +81,7 @@ export const managePricebooksToolDefinition = {
       supplierIds: {
         type: 'array',
         items: { type: 'number' },
-        description: 'Array of merchant IDs (rp_price_book.merchant_id, exposed as `pricebook.supplierId` in list responses). NOT pricebook IDs (`pricebook.id`). Prefer `supplierNames` when the supplier name is known. Passing a pricebook ID instead of a merchant ID throws a structured error with the correct value.',
+        description: 'Array of supplier IDs, NOT pricebook IDs (`pricebook.id`). Prefer `supplierNames` when the supplier name is known. Passing a pricebook ID instead of a supplierID throws a structured error with the correct value.',
       },
       pageSize: {
         type: 'number',
