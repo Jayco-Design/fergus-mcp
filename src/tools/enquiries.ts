@@ -20,7 +20,6 @@ export const manageEnquiriesToolDefinition = {
       enquiryId: {
         type: 'number',
         description: 'Enquiry ID (required for: get)',
-        minimum: 1,
       },
       // list params
       filterStatus: {
