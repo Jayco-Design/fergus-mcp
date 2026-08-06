@@ -18,26 +18,35 @@ export const manageEnquiriesToolDefinition = {
         description: 'The action to perform',
       },
       enquiryId: {
-        type: 'string',
+        type: 'number',
         description: 'Enquiry ID (required for: get)',
+        minimum: 1,
       },
       // list params
       filterStatus: {
         type: 'string',
         description: 'Filter by enquiry status (for: list)',
+        enum: ['TODO', 'CONTACTED', 'JOBCREATED', 'REJECTED'],
+      },
+      filterSource: {
+        type: 'string',
+        description: 'Filter by the source the enquiry came from (for: list)',
       },
       filterSearchText: {
         type: 'string',
-        description: 'Search text (for: list)',
+        description: 'Search text, matches on name, description, phone and email (for: list)',
       },
       pageSize: {
         type: 'number',
-        description: 'Max results per page (for: list, default: 50)',
+        description: 'Max results per page, 1-100 (for: list, default: 50)',
         default: 50,
+        minimum: 1,
+        maximum: 100,
       },
       sortField: {
         type: 'string',
         description: 'Field to sort by (for: list)',
+        enum: ['createdAt'],
       },
       sortOrder: {
         type: 'string',
@@ -49,33 +58,54 @@ export const manageEnquiriesToolDefinition = {
         description: 'Pagination cursor (for: list)',
       },
       // create params
-      title: {
+      name: {
         type: 'string',
-        description: 'Enquiry title (required for: create)',
+        description: 'Name of the person making the enquiry (required for: create)',
+      },
+      email: {
+        type: 'string',
+        format: 'email',
+        description: 'Email address of the enquirer (required for: create)',
+      },
+      phoneNumber: {
+        type: 'string',
+        description: 'Phone number of the enquirer (required for: create)',
       },
       description: {
         type: 'string',
-        description: 'Enquiry description (for: create)',
+        description: 'Description of the enquiry (required for: create)',
       },
-      customerId: {
-        type: 'number',
-        description: 'Customer ID (for: create)',
-      },
-      siteId: {
-        type: 'number',
-        description: 'Site ID (for: create)',
-      },
-      contactName: {
+      source: {
         type: 'string',
-        description: 'Contact name (for: create)',
+        description: 'Where the enquiry came from, e.g. "Website", "Phone", "Referral" (required for: create)',
       },
-      contactPhone: {
+      address1: {
         type: 'string',
-        description: 'Contact phone (for: create)',
+        description: 'Address line 1 (required for: create)',
       },
-      contactEmail: {
+      address2: {
         type: 'string',
-        description: 'Contact email (for: create)',
+        description: 'Address line 2 (for: create)',
+      },
+      addressSuburb: {
+        type: 'string',
+        description: 'Suburb (for: create)',
+      },
+      addressCity: {
+        type: 'string',
+        description: 'City (required for: create)',
+      },
+      addressRegion: {
+        type: 'string',
+        description: 'State/province/region (for: create)',
+      },
+      addressPostcode: {
+        type: 'string',
+        description: 'Postal/ZIP code (for: create)',
+      },
+      addressCountry: {
+        type: 'string',
+        description: 'Country (for: create)',
       },
     },
     required: ['action'],
@@ -107,11 +137,20 @@ async function handleGetEnquiry(fergusClient: FergusClient, args: Record<string,
 }
 
 async function handleListEnquiries(fergusClient: FergusClient, args: Record<string, any>) {
-  const { filterStatus, filterSearchText, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  const {
+    filterStatus,
+    filterSource,
+    filterSearchText,
+    pageSize = 50,
+    sortField,
+    sortOrder,
+    pageCursor,
+  } = args;
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (filterStatus) params.append('filterStatus', filterStatus);
+  if (filterSource) params.append('filterSource', filterSource);
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
   if (sortField) params.append('sortField', sortField);
   if (sortOrder) params.append('sortOrder', sortOrder);
@@ -121,17 +160,38 @@ async function handleListEnquiries(fergusClient: FergusClient, args: Record<stri
   return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(enquiries), null, 2) }] };
 }
 
-async function handleCreateEnquiry(fergusClient: FergusClient, args: Record<string, any>) {
-  const { title, description, customerId, siteId, contactName, contactPhone, contactEmail } = args;
-  if (!title) throw new Error('title is required for create action');
+const REQUIRED_CREATE_FIELDS = [
+  'name',
+  'email',
+  'phoneNumber',
+  'description',
+  'source',
+  'address1',
+  'addressCity',
+] as const;
 
-  const requestBody: any = { title };
-  if (description) requestBody.description = description;
-  if (customerId) requestBody.customerId = customerId;
-  if (siteId) requestBody.siteId = siteId;
-  if (contactName) requestBody.contactName = contactName;
-  if (contactPhone) requestBody.contactPhone = contactPhone;
-  if (contactEmail) requestBody.contactEmail = contactEmail;
+const OPTIONAL_CREATE_FIELDS = [
+  'address2',
+  'addressSuburb',
+  'addressRegion',
+  'addressPostcode',
+  'addressCountry',
+] as const;
+
+async function handleCreateEnquiry(fergusClient: FergusClient, args: Record<string, any>) {
+  const missing = REQUIRED_CREATE_FIELDS.filter((field) => !args[field]?.toString().trim());
+  if (missing.length > 0) {
+    throw new Error(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required for create action`);
+  }
+
+  const requestBody: any = {};
+  for (const field of REQUIRED_CREATE_FIELDS) {
+    requestBody[field] = args[field];
+  }
+  // The API rejects blank strings on address fields, so only send ones with a value
+  for (const field of OPTIONAL_CREATE_FIELDS) {
+    if (args[field]?.toString().trim()) requestBody[field] = args[field];
+  }
 
   const enquiry = await fergusClient.post('/enquiries', requestBody);
   return { content: [{ type: 'text' as const, text: JSON.stringify(enquiry, null, 2) }] };
