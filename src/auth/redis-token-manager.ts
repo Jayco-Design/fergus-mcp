@@ -22,11 +22,11 @@ export class RedisTokenManager implements ITokenManager {
   private config: OAuthConfig;
   private refreshThresholdMs = 5 * 60 * 1000; // Refresh if < 5 minutes remaining
   private keyPrefix = 'fergus-mcp:tokens:';
-  private sessionTimeoutMs: number; // TTL for Redis keys (from SESSION_TIMEOUT_MS env var)
+  private tokenTtlMs: number; // TTL for Redis keys (from TOKEN_TTL_MS env var)
 
-  constructor(config: OAuthConfig, redisUrl: string, sessionTimeoutMs?: number) {
+  constructor(config: OAuthConfig, redisUrl: string, tokenTtlMs?: number) {
     this.config = config;
-    this.sessionTimeoutMs = sessionTimeoutMs || 7 * 24 * 60 * 60 * 1000; // Default: 7 days
+    this.tokenTtlMs = tokenTtlMs || 30 * 24 * 60 * 60 * 1000; // Default: 30 days
     this.redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
@@ -58,9 +58,11 @@ export class RedisTokenManager implements ITokenManager {
     };
 
     const key = this.getKey(sessionId);
-    // Use SESSION_TIMEOUT_MS for Redis TTL (should match refresh token lifetime, not access token)
-    // Access tokens expire in 1 hour, but we need to keep refresh tokens for the full session duration
-    const ttl = Math.floor(this.sessionTimeoutMs / 1000); // Convert ms to seconds
+    // TTL tracks the Cognito *refresh* token lifetime, not the 1 hour access token
+    // lifetime. If the key expired alongside the access token, the refresh that is due
+    // at that same moment would find nothing and the user would be sent back through
+    // the OAuth flow.
+    const ttl = Math.floor(this.tokenTtlMs / 1000); // Convert ms to seconds
 
     await this.redis.setex(key, ttl, JSON.stringify(stored));
 
@@ -244,11 +246,28 @@ export class RedisTokenManager implements ITokenManager {
       return null;
     }
 
+    // Sliding expiration: only storeTokens() used to extend the TTL, and that runs just
+    // once an hour when the Cognito token is renewed. A session in continuous use could
+    // therefore still hit the TTL and drop mid-conversation. Every read pushes it out.
+    await this.touch(key);
+
     try {
       return JSON.parse(data) as StoredTokens;
     } catch (error) {
       console.error(`[RedisTokenManager] Failed to parse stored tokens for session ${sessionId}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Extends the TTL of an existing token key
+   */
+  private async touch(key: string): Promise<void> {
+    try {
+      await this.redis.expire(key, Math.floor(this.tokenTtlMs / 1000));
+    } catch (error) {
+      // A failed TTL extension must not fail the request - the key is still valid.
+      console.error(`[RedisTokenManager] Failed to extend TTL for ${key}:`, error);
     }
   }
 
