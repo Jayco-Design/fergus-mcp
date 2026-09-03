@@ -36,7 +36,15 @@ export interface OAuthConfig {
 }
 
 export interface SessionConfig {
+  /** How long an idle MCP transport session is kept before cleanup. */
   timeoutMs: number;
+  /**
+   * How long stored OAuth tokens (including the Cognito *refresh* token) are kept.
+   * Must track the Cognito refresh token lifetime, NOT the 1 hour access token
+   * lifetime - the refresh token is what lets us mint new access tokens without
+   * sending the user back through the login flow.
+   */
+  tokenTtlMs: number;
   storage: 'memory' | 'redis' | 'file';
   redisUrl?: string;
 }
@@ -134,18 +142,43 @@ export function loadOAuthConfig(): OAuthConfig {
  */
 export function loadSessionConfig(): SessionConfig {
   const storage = (process.env.SESSION_STORAGE as 'memory' | 'redis') || 'memory';
-  // Default to 7 days (OAuth refresh tokens are valid for 365 days in Cognito)
-  // This allows long-lived sessions while still cleaning up truly abandoned sessions
-  const timeoutMs = parseInt(process.env.SESSION_TIMEOUT_MS || '604800000', 10); // 7 days
+  // Idle MCP transport sessions are cheap to rebuild (the client re-initializes with the
+  // token it already holds), so this can be short. It is deliberately NOT the token TTL.
+  const timeoutMs = parseInt(process.env.SESSION_TIMEOUT_MS || '86400000', 10); // 24 hours
+  // Token TTL must outlive the access token by a wide margin. If it matches the access
+  // token lifetime, the stored refresh token expires at the same moment the access token
+  // does, every refresh finds nothing, and the user is forced back through the OAuth flow
+  // roughly once an hour.
+  const tokenTtlMs = parseInt(process.env.TOKEN_TTL_MS || '2592000000', 10); // 30 days
   const redisUrl = process.env.REDIS_URL;
 
   if (storage === 'redis' && !redisUrl) {
     throw new Error('REDIS_URL is required when SESSION_STORAGE=redis');
   }
 
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`SESSION_TIMEOUT_MS must be a positive number of milliseconds, got: ${process.env.SESSION_TIMEOUT_MS}`);
+  }
+
+  if (!Number.isFinite(tokenTtlMs) || tokenTtlMs <= 0) {
+    throw new Error(`TOKEN_TTL_MS must be a positive number of milliseconds, got: ${process.env.TOKEN_TTL_MS}`);
+  }
+
+  // A token TTL at or near the access token lifetime guarantees forced re-authentication.
+  const ACCESS_TOKEN_LIFETIME_MS = 60 * 60 * 1000;
+  if (tokenTtlMs <= ACCESS_TOKEN_LIFETIME_MS * 2) {
+    console.error(
+      `[Config] WARNING: TOKEN_TTL_MS is ${tokenTtlMs}ms, at or near the ` +
+      `${ACCESS_TOKEN_LIFETIME_MS}ms access token lifetime. Users will be forced to ` +
+      `re-authenticate when their access token expires. Set it to the Cognito refresh ` +
+      `token lifetime (e.g. 2592000000 for 30 days).`
+    );
+  }
+
   return {
     storage,
     timeoutMs,
+    tokenTtlMs,
     redisUrl,
   };
 }

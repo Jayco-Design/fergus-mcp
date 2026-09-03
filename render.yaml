@@ -56,5 +56,12 @@ services:
         value: https://fergus-mcp-server.onrender.com/oauth/callback # Update with your actual Render URL
 
       # Session Configuration
+      # Idle MCP transport sessions only; the client re-initializes silently after this.
       - key: SESSION_TIMEOUT_MS
-        value: 3600000 # 1 hour
+        value: 86400000 # 24 hours
+      # How long stored OAuth tokens live. MUST track the Cognito refresh token lifetime,
+      # not the 1 hour access token lifetime - if it matches the access token, the refresh
+      # token is gone exactly when it is needed and users re-authenticate roughly hourly.
+      # Keep in step with the Cognito app client's refresh token expiration setting.
+      - key: TOKEN_TTL_MS
+        value: 2592000000 # 30 days
