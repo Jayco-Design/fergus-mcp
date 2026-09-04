@@ -40,3 +40,6 @@ jobs:
 
       - name: Typechecking
         run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
