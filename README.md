@@ -23,7 +23,7 @@ This server supports two transport modes:
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18+)
+- [Node.js](https://nodejs.org/) (v24+)
 - [pnpm](https://pnpm.io/)
 - [tsx](https://github.com/privatenumber/tsx) installed globally:
   ```bash

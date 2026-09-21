@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+.sessions
+.git
+.github
+.claude
+.agents
+.codex
+*.md
