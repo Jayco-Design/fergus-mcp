@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc && pnpm run copy-templates",
-    "docker:build": "docker compose build --no-cache",
-    "copy-templates": "cp -r src/templates/customers src/templates/shared dist/templates/ 2>/dev/null || :",
+    "docker:build": "docker compose build --pull --no-cache",
+    "copy-templates": "mkdir -p dist/templates && cp -r src/templates/customers src/templates/shared dist/templates/",
     "dev:http": "tsx src/http-server.ts",
     "start:http": "node dist/http-server.js",
     "prepare": "pnpm run build",
@@ -26,25 +26,25 @@
   ],
   "author": "",
   "license": "MIT",
-  "packageManager": "pnpm@10.28.2",
+  "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "ioredis": "^5.9.2",
-    "uuid": "^13.0.0"
+    "ioredis": "^5.11.1",
+    "uuid": "^13.0.2"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^22.19.8",
-    "tsx": "^4.21.0",
+    "@types/node": "^24.13.6",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }

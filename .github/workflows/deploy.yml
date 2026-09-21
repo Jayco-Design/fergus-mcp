@@ -31,6 +31,7 @@ jobs:
         with:
           context: .
           platforms: linux/arm64
+          pull: true
           push: true
           tags: |
             fergusapp/mcp:${{ github.event.release.tag_name }}
