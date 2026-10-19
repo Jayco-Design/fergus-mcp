@@ -12,7 +12,7 @@ const repeatEndTypeOptions = ['NEVER', 'ON_DATE', 'AFTER'] as const;
 
 export const manageCalendarEventsToolDefinition = {
   name: 'manage-calendar-events',
-  description: 'Manage calendar events. Actions: list, get, create, update, delete. All times are stored in UTC — when querying for a local date range, offset filterDateFrom/filterDateTo to account for the company timezone (e.g. for NZDT/UTC+13, subtract 13 hours from the local start/end). For list: send filterDateFrom with a timezone offset (e.g. 2026-03-27T00:00:00+13:00) so the partner API computes correct day boundaries. Use filterCalendarRange to control the date window (DAY, WEEK, etc.). Note: filterDateTo is not supported by the partner API and will be ignored.',
+  description: 'Manage calendar events. Actions: list, get, create, update, delete. All times are stored in UTC — when querying for a local date range, offset filterDateFrom/filterDateTo to account for the company timezone (e.g. for NZDT/UTC+13, subtract 13 hours from the local start/end). For list: send filterDateFrom with a timezone offset (e.g. 2026-03-27T00:00:00+13:00) so the partner API computes correct day boundaries. Use filterCalendarRange to control the date window (DAY, WEEK, etc.). Note: filterDateTo is not supported by the partner API and will be ignored. Updating: each person on an event has their own linked copy of it. When updating, first get the event and send back its current eventTitle (the title from get), startTime, endTime, userId and description along with the change. Take startTime and endTime from get, not from list: list shows each repeat of a repeating event at its own time. To put another person on an existing booking, find the people with manage-users (search by name) and the booking with list (by date, and user or job), then get it and update it with userId set to the userId from get (or, if the booking is unassigned, one of the people being added), linkedUserIds set to everyone who should be on it (including that person), and updateAllGrouped "TRUE". On a repeating event, also send updateAllRecurring "TRUE" (without repeatSplitOnDate) and its current repeat settings.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -97,16 +97,16 @@ export const manageCalendarEventsToolDefinition = {
       },
       description: {
         type: 'string',
-        description: 'Event description (for: create, update)',
+        description: 'Event description (for: create, update). On update, send the current description from get to keep it.',
       },
       userId: {
         type: 'number',
-        description: 'User ID to assign the event to. Use this for single-user events — this is the primary way to assign someone to an event. (for: create, update)',
+        description: 'User ID of the person the event is assigned to (for: create, update). On update, send the assignee the event should have; to keep the current one, send the userId from get.',
       },
       linkedUserIds: {
         type: 'array',
         items: { type: 'number' },
-        description: 'Array of user IDs for group events only (assigns the same event to multiple people). For assigning a single user, use userId instead. (for: create, update)',
+        description: 'The complete list of user IDs who should be on the event, including userId, not just the people being added. Each person gets their own linked copy of the event, and anyone already on it who is left out is taken off it. On update, send it with updateAllGrouped "TRUE". (for: create, update)',
       },
       jobId: {
         type: 'number',
@@ -120,7 +120,7 @@ export const manageCalendarEventsToolDefinition = {
       frequency: {
         type: 'string',
         enum: [...frequencyOptions],
-        description: 'Recurrence frequency. Default: NEVER. (for: create, update)',
+        description: 'Recurrence frequency. Default: NEVER. On update to a repeating event, send its current repeat settings (frequency, interval, and repeatEndType with repeatEndDate or repeatCount), read from recurringEventDetails.rRule, to keep it repeating; NEVER stops it repeating. (for: create, update)',
       },
       interval: {
         type: 'number',
@@ -143,7 +143,7 @@ export const manageCalendarEventsToolDefinition = {
       updateAllRecurring: {
         type: 'string',
         enum: ['TRUE', 'FALSE'],
-        description: 'Whether to update all future recurring occurrences. Required when updating a recurring event. (for: update)',
+        description: 'Whether to update all future recurring occurrences. Required when updating a recurring event. To change the series, including who is on it, send "TRUE" without repeatSplitOnDate, with startTime and endTime from get. (for: update)',
       },
       repeatSplitOnDate: {
         type: 'string',
@@ -152,7 +152,7 @@ export const manageCalendarEventsToolDefinition = {
       updateAllGrouped: {
         type: 'string',
         enum: ['TRUE', 'FALSE'],
-        description: 'Whether to update all events in a group. Required when updating a grouped event. (for: update)',
+        description: 'Whether to update every linked copy of the event (one per person on it). Required when updating a grouped event. Send "TRUE" whenever linkedUserIds is sent. (for: update)',
       },
       // delete-specific params
       deleteAllRecurring: {
