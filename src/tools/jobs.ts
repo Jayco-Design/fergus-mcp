@@ -332,7 +332,7 @@ async function handleFinalizeJob(
   }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
-  const job = await fergusClient.put(`/jobs/${jobId}/finalise`, {});
+  const job = await fergusClient.action('PUT', `/jobs/${jobId}/finalise`);
   return {
     content: [
       {

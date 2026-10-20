@@ -240,9 +240,10 @@ async function handleArchiveSite(
     throw new Error('siteId is required for archive action');
   }
 
-  const result = await fergusClient.post(`/sites/${siteId}/archive`, {});
+  // Archive returns 204, which FergusClient turns into {}
+  const result = await fergusClient.action<Record<string, unknown>>('POST', `/sites/${siteId}/archive`);
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(result ?? { success: true }, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(Object.keys(result).length ? result : { success: true }, null, 2) }],
   };
 }
 
@@ -257,7 +258,7 @@ async function handleRestoreSite(
     throw new Error('siteId is required for restore action');
   }
 
-  const result = await fergusClient.post(`/sites/${siteId}/restore`, {});
+  const result = await fergusClient.action('POST', `/sites/${siteId}/restore`);
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
   };

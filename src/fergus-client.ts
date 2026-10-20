@@ -77,7 +77,9 @@ export class FergusClient {
 
     const headers = new Headers(options.headers);
     headers.set('Authorization', `Bearer ${token}`);
-    headers.set('Content-Type', 'application/json');
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     try {
       const response = await fetch(url, {
@@ -149,6 +151,17 @@ export class FergusClient {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Bodyless POST/PUT for Fergus action endpoints (job finalise, site
+   * archive/restore) whose schemas reject anything but Content-Type: text/plain
+   */
+  async action<T>(method: 'POST' | 'PUT', endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, {
+      method,
+      headers: { 'Content-Type': 'text/plain' },
     });
   }
 
