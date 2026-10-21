@@ -4,6 +4,7 @@
  */
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { assertContactItemInputs, hasContactItemChanges, userContactItemChanges } from '../utils/contact-items.js';
 import { FergusClient } from '../fergus-client.js';
 import { formatResponse, isChatGPT, extractPagination } from '../utils/format-response.js';
 
@@ -92,7 +93,20 @@ export const manageUsersToolDefinition = {
       },
       contactItems: {
         type: 'array',
-        description: 'Contact items (for: update)',
+        description: 'Contact items to save (for: update). Items with an id (from get) are changed in place; items without an id are added. Existing items are never removed. Users can\'t have email items.',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Id of an existing item (from get) to change it; leave out to add a new item' },
+            contactType: { type: 'string', enum: ['phone', 'mobile', 'other', 'fax', 'website'] },
+            contactValue: { type: 'string' },
+          },
+          required: ['contactType', 'contactValue'],
+        },
+      },
+      addContactItems: {
+        type: 'array',
+        description: 'Contact items to add, keeping the existing ones (for: update). Cannot be combined with contactItems.',
         items: {
           type: 'object',
           properties: {
@@ -101,6 +115,24 @@ export const manageUsersToolDefinition = {
           },
           required: ['contactType', 'contactValue'],
         },
+      },
+      updateContactItems: {
+        type: 'array',
+        description: 'Existing contact items to change, by id from get (for: update). Cannot be combined with contactItems.',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            contactType: { type: 'string', enum: ['phone', 'mobile', 'other', 'fax', 'website'] },
+            contactValue: { type: 'string' },
+          },
+          required: ['id'],
+        },
+      },
+      removeContactItems: {
+        type: 'array',
+        description: 'Not supported for users: the API never removes a user\'s contact items, so this returns an error (for: update)',
+        items: { type: 'number' },
       },
     },
     required: ['action'],
@@ -194,9 +226,20 @@ async function handleUpdateUser(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { userId, firstName, lastName, address, payRate, chargeOutRate, contactItems } = args;
+  const { userId, firstName, lastName, address, payRate, chargeOutRate } = args;
   if (!userId) {
     throw new Error('userId is required for update action');
+  }
+  assertContactItemInputs(args, 'update');
+
+  let contactItems = args.contactItems;
+  if (hasContactItemChanges(args)) {
+    let currentItems: any[] | null = [];
+    if (args.updateContactItems?.length) {
+      const response: any = await fergusClient.get(`/users/${userId}`);
+      currentItems = (response?.data ?? response)?.contactItems;
+    }
+    contactItems = userContactItemChanges(currentItems, args, 'update');
   }
 
   const requestBody: any = {};

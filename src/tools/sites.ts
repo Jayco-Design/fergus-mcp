@@ -5,12 +5,13 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { mapAddress, mapContact } from '../utils/fergus-mappers.js';
+import { existingRecordResult } from '../utils/existing-record.js';
 import { addressSchema, contactSchema } from './schemas.js';
 import { extractPagination } from '../utils/format-response.js';
 
 export const manageSitesToolDefinition = {
   name: 'manage-sites',
-  description: 'Manage sites. Actions: get, list, create, update, archive, restore',
+  description: 'Manage sites. Actions: get, list, create, update, archive, restore. Create returns alreadyExists with the existing site when a site at that address already exists; nothing is created, so tell the user and offer to update it if their details differ.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -197,9 +198,17 @@ async function handleCreateSite(
   if (billingContact) requestBody.billingContact = billingContact;
   if (postalAddress) requestBody.postalAddress = postalAddress;
 
-  const site = await fergusClient.post('/sites', requestBody);
+  const result = await fergusClient.createOrFindExisting('/sites', requestBody);
+  if (!result.created) {
+    const address = [siteAddress.address1, siteAddress.addressSuburb, siteAddress.addressCity].filter(Boolean).join(', ');
+    return existingRecordResult(
+      fergusClient,
+      result.location,
+      `A site at ${address} already exists. Nothing was created; use update to change it.`
+    );
+  }
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(site, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(result.body, null, 2) }],
   };
 }
 
