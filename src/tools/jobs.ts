@@ -22,7 +22,7 @@ const jobTypeSchema = {
 
 export const manageJobsToolDefinition = {
   name: 'manage-jobs',
-  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary. The wrapper preserves title/jobType on updates and compensates for Fergus read/write model mismatches. IMPORTANT: When creating a job, always confirm jobType, customer, and site with the user before proceeding — do not infer or assume these from existing jobs or context.',
+  description: 'Manage jobs. Actions: get, list, create, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase, void-phase, get-phase-financial-summary. Update only works on draft jobs, and changes the title, job type, description, customer, site or customer reference; the current title and job type are kept if left out. Job numbers of archived and on-hold jobs are found too. IMPORTANT: When creating a job, always confirm jobType, customer, and site with the user before proceeding — do not infer or assume these from existing jobs or context.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -33,7 +33,7 @@ export const manageJobsToolDefinition = {
       },
       jobId: {
         ...jobIdSchema,
-        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase)',
+        description: 'Job number or API ID. Accepts "Job-500", "500", or an API ID. Draft jobs have no job number, so update and finalize need the draft\'s API ID, which is returned when the draft is created; drafts don\'t appear in list. (required for: get, update, finalize, get-financial-summary, list-phases, get-phase, create-phase, update-phase)',
       },
       // list params
       filterJobNo: {
@@ -56,6 +56,14 @@ export const manageJobsToolDefinition = {
       filterSiteId: {
         type: 'number',
         description: 'Filter by site ID. (for: list)',
+      },
+      filterShowArchived: {
+        type: 'boolean',
+        description: 'Set true to list only archived jobs (archived jobs, including on-hold ones, are left out by default). (for: list)',
+      },
+      filterShowOnHold: {
+        type: 'boolean',
+        description: 'Set true to list only on-hold jobs. Ignored when filterShowArchived is also true, which lists all archived jobs, on-hold ones included. (for: list)',
       },
       filterSearchText: {
         type: 'string',
@@ -85,11 +93,11 @@ export const manageJobsToolDefinition = {
       // create/update params
       jobType: {
         ...jobTypeSchema,
-        description: 'Type of job. Always ask the user which type to use — do not assume. (required for: create; optional for: update — wrapper preserves current value)',
+        description: 'Type of job. Always ask the user which type to use — do not assume. (required for: create; for: update of a draft job, which keeps the current type if left out)',
       },
       title: {
         type: 'string',
-        description: 'Job title. (required for: create; optional for: update — wrapper preserves current value)',
+        description: 'Job title. (required for: create; for: update, which keeps the current title if left out)',
       },
       description: {
         type: 'string',
@@ -119,11 +127,11 @@ export const manageJobsToolDefinition = {
       },
       phaseName: {
         type: 'string',
-        description: 'Phase name. (required for: create-phase; for: update-phase)',
+        description: 'Phase name. (required for: create-phase; for: update-phase, which keeps the current name if omitted)',
       },
       phaseDescription: {
         type: 'string',
-        description: 'Phase description. (required for: create-phase; for: update-phase)',
+        description: 'Phase description. (required for: create-phase; for: update-phase, which keeps the current description if omitted; an empty string clears it)',
       },
     },
     required: ['action'],
@@ -217,6 +225,10 @@ async function handleListJobs(
   if (filterJobType) params.append('filterJobType', filterJobType);
   if (filterCustomerId) params.append('filterCustomerId', filterCustomerId.toString());
   if (filterSiteId) params.append('filterSiteId', filterSiteId.toString());
+  // Only send these when true: an explicit false makes the API skip its
+  // archived filter and return active and archived jobs together.
+  if (args.filterShowArchived === true) params.append('filterShowArchived', 'true');
+  if (args.filterShowOnHold === true) params.append('filterShowOnHold', 'true');
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
 
   const jobs = await fergusClient.get(`/jobs?${params.toString()}`);
@@ -278,14 +290,21 @@ async function handleUpdateJob(
   if (!jobRef) {
     throw new Error('jobId is required for update action');
   }
+  if (description === '') {
+    throw new Error("A job's description can't be set to empty. Nothing was changed.");
+  }
+  if (customerReference === '') {
+    throw new Error("A job's customer reference can't be set to empty. Nothing was changed.");
+  }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
   const existingJobResponse: any = await fergusClient.get(`/jobs/${jobId}`);
   const existingJob = existingJobResponse?.data ?? existingJobResponse;
 
-  // Fergus currently rejects partial job updates unless title and jobType
-  // are present. The read model exposes the job title as "description",
-  // so fall back to that field when "title" is absent in GET responses.
+  // The API only updates draft jobs, and requires title and jobType on
+  // every update, so send the current values when they aren't given. The read
+  // model exposes the job title as "description", so use that when "title" is
+  // absent in GET responses.
   const requestBody: any = {
     title: title ?? existingJob?.title ?? existingJob?.description,
     jobType: jobType ?? existingJob?.jobType,
@@ -300,7 +319,8 @@ async function handleUpdateJob(
     customerId === undefined &&
     siteId === undefined &&
     customerReference === undefined &&
-    title === undefined
+    title === undefined &&
+    jobType === undefined
   ) {
     throw new Error('At least one field must be provided to update the job');
   }
@@ -451,15 +471,28 @@ async function handleUpdatePhase(
   if (!jobRef || !jobPhaseId) {
     throw new Error('jobId and jobPhaseId are required for update-phase action');
   }
-  if (!phaseName && !phaseDescription) {
+  // An empty phaseDescription is a value: it clears the description.
+  const descriptionGiven = phaseDescription !== undefined && phaseDescription !== null;
+  if (!phaseName && !descriptionGiven) {
     throw new Error('At least one of phaseName or phaseDescription must be provided for update-phase action');
   }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
-  const requestBody: any = {};
-  if (phaseName) requestBody.title = phaseName;
-  if (phaseDescription) requestBody.description = phaseDescription;
+  // The API needs both title and description on a phase update, so keep the
+  // current value of whichever wasn't given.
+  let current: any = {};
+  if (!phaseName || !descriptionGiven) {
+    const response: any = await fergusClient.get(`/jobs/${jobId}/phases/${jobPhaseId}`);
+    current = response?.data ?? response;
+  }
+  const requestBody: any = {
+    title: phaseName || current.title,
+    description: phaseDescription ?? current.description ?? '',
+  };
+  if (!requestBody.title) {
+    throw new Error(`Phase ${jobPhaseId} has no name on record; send phaseName. Nothing was changed.`);
+  }
 
   const phase = await fergusClient.put(`/jobs/${jobId}/phases/${jobPhaseId}`, requestBody);
   return {
