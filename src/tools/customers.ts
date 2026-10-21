@@ -7,6 +7,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { FergusClient } from '../fergus-client.js';
 import { formatResponse, isChatGPT, extractPagination } from '../utils/format-response.js';
 import { addressSchema, contactSchema } from './schemas.js';
+import { contactEmail, contactPhone, mapAddress } from '../utils/fergus-mappers.js';
 
 export const manageCustomersToolDefinition = {
   name: 'manage-customers',
@@ -119,8 +120,8 @@ async function handleGetCustomer(
   const structuredCustomer = {
     id: customer.id || customer.customerId,
     name: customer.customerFullName || customer.name,
-    email: customer.mainContact?.email || customer.email,
-    phone: customer.mainContact?.phone || customer.phone,
+    email: contactEmail(customer.mainContact?.contactItems) || customer.email,
+    phone: contactPhone(customer.mainContact?.contactItems) || customer.phone,
     mainContact: customer.mainContact,
     physicalAddress: customer.physicalAddress,
     postalAddress: customer.postalAddress,
@@ -158,27 +159,13 @@ async function handleListCustomers(
   const response = await fergusClient.get(`/customers?${params.toString()}`) as any;
   const customers = Array.isArray(response) ? response : (response.data || response.customers || []);
 
-  const structuredCustomers = customers.map((customer: any) => {
-    const contactItems = customer.mainContact?.contactItems || [];
-    const emailItem = contactItems.find((c: any) => c.contactType === 'email');
-    const phoneItem = contactItems.find((c: any) => c.contactType === 'phone' || c.contactType === 'mobile');
-
-    return {
-      id: customer.id || customer.customerId,
-      name: customer.customerFullName || customer.name,
-      email: emailItem?.contactValue || customer.email,
-      phone: phoneItem?.contactValue || customer.phone,
-      address: customer.physicalAddress ? {
-        line1: customer.physicalAddress.address1,
-        line2: customer.physicalAddress.address2,
-        suburb: customer.physicalAddress.addressSuburb,
-        city: customer.physicalAddress.addressCity,
-        region: customer.physicalAddress.addressRegion,
-        postalCode: customer.physicalAddress.addressPostcode,
-        country: customer.physicalAddress.addressCountry,
-      } : null,
-    };
-  });
+  const structuredCustomers = customers.map((customer: any) => ({
+    id: customer.id || customer.customerId,
+    name: customer.customerFullName || customer.name,
+    email: contactEmail(customer.mainContact?.contactItems) || customer.email,
+    phone: contactPhone(customer.mainContact?.contactItems) || customer.phone,
+    address: mapAddress(customer.physicalAddress),
+  }));
 
   return formatResponse({
     customers: structuredCustomers,

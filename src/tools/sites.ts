@@ -4,6 +4,7 @@
  */
 
 import { FergusClient } from '../fergus-client.js';
+import { mapAddress, mapContact } from '../utils/fergus-mappers.js';
 import { addressSchema, contactSchema } from './schemas.js';
 import { extractPagination } from '../utils/format-response.js';
 
@@ -162,17 +163,11 @@ async function handleListSites(
   const structuredSites = sites.map((site: any) => ({
     id: site.id || site.siteId,
     name: site.name,
-    address: {
-      line1: site.siteAddress?.line1 || site.address?.line1,
-      city: site.siteAddress?.city || site.address?.city,
-      postalCode: site.siteAddress?.postalCode || site.address?.postalCode,
-      country: site.siteAddress?.country || site.address?.country,
-    },
-    defaultContact: site.defaultContact ? {
-      name: site.defaultContact.name,
-      email: site.defaultContact.email,
-      phone: site.defaultContact.phone,
-    } : null,
+    address: mapAddress(site.physicalAddress),
+    postalAddress: mapAddress(site.postalAddress),
+    defaultContact: mapContact(site.defaultContact),
+    billingContact: mapContact(site.billingContact),
+    isArchived: site.isArchived,
   }));
 
   return {
