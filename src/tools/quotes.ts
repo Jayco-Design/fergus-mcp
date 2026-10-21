@@ -74,7 +74,7 @@ const sectionsSchema = {
 
 export const manageQuotesToolDefinition = {
   name: 'manage-quotes',
-  description: 'Manage quotes. Actions: get, get-by-guid, get-detail, list (per job), list-all (across jobs), create, update, update-version, get-totals, accept, publish, mark-as-sent, decline, void. The wrapper preserves title/description on updates. Only draft quotes can be updated.',
+  description: 'Manage quotes. Actions: get, get-by-guid, get-detail, list (per job), list-all (across jobs), create, update, update-version, get-totals, accept, publish, mark-as-sent, decline, void. On update and update-version, title and description are kept unless given. Only draft quotes can be updated. sections is still required on update and replaces all existing sections, so to change only the title or intro, get the quote first and send its sections back unchanged.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -127,14 +127,14 @@ export const manageQuotesToolDefinition = {
         type: 'string',
         description: 'Pagination cursor for the next page. (for: list, list-all)',
       },
-      // create params
+      // create/update params
       title: {
         type: 'string',
-        description: 'Quote title. (required for: create)',
+        description: 'Quote title. Cannot be empty. On update, the current title is kept if omitted. (required for: create; for: update, update-version)',
       },
       description: {
         type: 'string',
-        description: 'Quote description. (for: create)',
+        description: "Quote intro, shown to the customer at the top of the quote. HTML: send paragraphs as <p> and line breaks as <br>, or they run together. On update, the current intro is kept if omitted; an empty string clears it. (for: create, update, update-version)",
       },
       dueDays: {
         type: 'number',
@@ -372,6 +372,24 @@ async function handleCreateQuote(
 
 // ===== UPDATE QUOTE =====
 
+function assertTitleNotEmpty(title: unknown) {
+  if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) {
+    throw new Error('title cannot be empty');
+  }
+}
+
+/**
+ * PUT saves an omitted title or description as null, so send the caller's
+ * value when given and the quote's current value otherwise.
+ */
+function buildUpdateRequestBody(existing: any, args: Record<string, any>) {
+  return {
+    title: args.title !== undefined ? args.title : existing.title || '',
+    description: args.description !== undefined ? args.description : existing.description || null,
+    sections: args.sections,
+  };
+}
+
 async function handleUpdateQuote(
   fergusClient: FergusClient,
   args: Record<string, any>
@@ -380,17 +398,13 @@ async function handleUpdateQuote(
   if (!jobRef || !quoteId || !sections) {
     throw new Error('jobId, quoteId, and sections are required for update action');
   }
+  assertTitleNotEmpty(args.title);
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   try {
-    // Fetch existing quote to preserve title and description (API workaround)
     const existingQuote: any = await fergusClient.get(`/jobs/${jobId}/quotes/${quoteId}`);
-    const requestBody = {
-      title: existingQuote.data.title || '',
-      description: existingQuote.data.description || null,
-      sections,
-    };
+    const requestBody = buildUpdateRequestBody(existingQuote.data, args);
 
     const quote = await fergusClient.put(`/jobs/${jobId}/quotes/${quoteId}`, requestBody);
     return {
@@ -417,6 +431,7 @@ async function handleUpdateQuoteVersion(
   if (!jobRef || !versionNumber || !sections) {
     throw new Error('jobId, versionNumber, and sections are required for update-version action');
   }
+  assertTitleNotEmpty(args.title);
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
@@ -428,11 +443,7 @@ async function handleUpdateQuoteVersion(
     }
 
     const existingQuote: any = await fergusClient.get(`/jobs/${jobId}/quotes/${targetQuote.id}`);
-    const requestBody = {
-      title: existingQuote.data.title || '',
-      description: existingQuote.data.description || null,
-      sections,
-    };
+    const requestBody = buildUpdateRequestBody(existingQuote.data, args);
 
     const quote = await fergusClient.put(`/jobs/${jobId}/quotes/version/${versionNumber}`, requestBody);
     return {
