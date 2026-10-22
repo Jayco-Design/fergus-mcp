@@ -193,8 +193,8 @@ async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<s
       if (invalidIds.length > 0) {
         const knownPricebookIdSet = new Set(knownPricebooks.map(pb => pb.id));
         const lines = [
-          `supplierIds contains values that aren't merchant IDs: [${invalidIds.join(', ')}].`,
-          `This looks like a pricebook ID (rp_price_book.id), not a supplier ID (rp_price_book.merchant_id).`,
+          `supplierIds contains values that aren't supplier IDs: [${invalidIds.join(', ')}].`,
+          `This looks like a pricebook ID (pricebook.id), not a supplier ID (pricebook.supplierId).`,
         ];
         for (const id of invalidIds) {
           if (knownPricebookIdSet.has(id)) {

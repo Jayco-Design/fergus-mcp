@@ -2,12 +2,12 @@
  * Tests for how manage-sites list and manage-customers get/list map the
  * partner API's response.
  *
- * fergus-partner-api returns addresses as physicalAddress/postalAddress
+ * The Partner API returns addresses as physicalAddress/postalAddress
  * ({ address1, addressCity, addressPostcode, ... }) and contacts as
- * { firstName, lastName, contactItems: [{ contactType, contactValue }] }
- * (src/routes/sites/response.ts, src/routes/customers). CUS-1409 was
- * manage-sites list reading siteAddress.line1 / defaultContact.email instead,
- * which don't exist, so every site listed with an empty address and contact.
+ * { firstName, lastName, contactItems: [{ contactType, contactValue }] }.
+ * The bug fixed here was manage-sites list reading siteAddress.line1 /
+ * defaultContact.email instead, which don't exist, so every site listed with
+ * an empty address and contact.
  *
  * The fake client returns those real shapes, so mapping the wrong field names
  * shows up here as missing values.
