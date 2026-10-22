@@ -9,7 +9,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  licences:
+    name: Licences
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: Jayco-Design/gha/.github/workflows/_license-scan-pnpm.yml@7655139d9417250d4e31d582452e25bf608305e4 # gha#38 (PLA-1128)
+
   build-image:
+    needs: licences
     name: "Build and Push Image"
     if: github.repository_owner == 'Jayco-Design'
     runs-on: blacksmith-4vcpu-ubuntu-2404-arm

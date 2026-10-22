@@ -24,44 +24,7 @@ permissions:
 jobs:
   licences:
     name: Licences
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
-    timeout-minutes: 15
     permissions:
       contents: read
-      pull-requests: write # the scan comments on the PR when it blocks
-    steps:
-      - name: Code Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Install NodeJS
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version-file: .nvmrc
-
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        name: Install pnpm
-        with:
-          run_install: false
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
-
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        name: Setup pnpm cache
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Scan dependency licences
-        uses: Jayco-Design/gha/actions/license-scan@dc4e8583725d7726f71543ce0f226c0e931bb83c # gha#37 (PLA-1128)
-        with:
-          profile: source
+      pull-requests: write
+    uses: Jayco-Design/gha/.github/workflows/_license-scan-pnpm.yml@7655139d9417250d4e31d582452e25bf608305e4 # gha#38 (PLA-1128)
