@@ -41,6 +41,10 @@ export const addressSchema = {
 export const contactItemSchema = {
   type: 'object',
   properties: {
+    id: {
+      type: 'number',
+      description: 'Id of an existing item (from get). Send it to keep or change that item; leave it out for a new item.',
+    },
     contactType: {
       type: 'string',
       enum: ['email', 'phone', 'mobile', 'other', 'fax', 'website'],
@@ -79,5 +83,39 @@ export const contactSchema = {
       description: 'Contact methods (email, phone, mobile, etc.)',
       items: contactItemSchema,
     },
+  },
+};
+
+/** Add, change or remove single contact items on update while keeping the rest. */
+export const contactItemChangeProperties = {
+  addContactItems: {
+    type: 'array',
+    description: 'Contact items to add, keeping the existing ones (for: update). Cannot be combined with contactItems.',
+    items: {
+      type: 'object',
+      properties: {
+        contactType: contactItemSchema.properties.contactType,
+        contactValue: contactItemSchema.properties.contactValue,
+      },
+      required: ['contactType', 'contactValue'],
+    },
+  },
+  updateContactItems: {
+    type: 'array',
+    description: 'Existing contact items to change, by id from get, keeping the others (for: update). Cannot be combined with contactItems.',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Id of the item to change (from get)' },
+        contactType: contactItemSchema.properties.contactType,
+        contactValue: contactItemSchema.properties.contactValue,
+      },
+      required: ['id'],
+    },
+  },
+  removeContactItems: {
+    type: 'array',
+    description: 'Ids (from get) of contact items to remove, keeping the others (for: update). Cannot be combined with contactItems.',
+    items: { type: 'number' },
   },
 };

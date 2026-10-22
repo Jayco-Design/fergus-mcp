@@ -102,6 +102,13 @@ export class FergusClient {
         );
       }
 
+      // A create that hits an existing record answers 303 with its Location.
+      // Callers that opt out of following redirects get the Location instead.
+      if (response.status === 303 && options.redirect === 'manual') {
+        const body = await this.parseResponseBody(response);
+        return { redirectLocation: response.headers.get('location') || body?.location || '' } as T;
+      }
+
       // Handle other error responses
       if (!response.ok) {
         const errorBody = await this.parseResponseBody(response);
@@ -142,6 +149,27 @@ export class FergusClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  /**
+   * POST a create to an endpoint that answers 303 with the existing record's
+   * Location when the record already exists (customers by name, sites by
+   * address), instead of following the redirect and passing the existing
+   * record off as newly created.
+   */
+  async createOrFindExisting<T>(
+    endpoint: string,
+    data: any
+  ): Promise<{ created: true; body: T } | { created: false; location: string }> {
+    const result: any = await this.request<any>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      redirect: 'manual',
+    });
+    if (result && typeof result === 'object' && 'redirectLocation' in result) {
+      return { created: false, location: result.redirectLocation ?? '' };
+    }
+    return { created: true, body: result as T };
   }
 
   /**
