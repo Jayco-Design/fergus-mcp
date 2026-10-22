@@ -1,16 +1,14 @@
 /**
  * Tests for manage-quotes update / update-version title and description.
  *
- * The partner API PUT /jobs/:jobId/quotes/:quoteId (and /version/:n) accepts
- * optional title and description, and saves an omitted one as null - see
- * fergus-partner-api's routes/quotes/dao/index.ts updateQuote
- * (`title: payload.title ?? null`). CUS-1420: the MCP always sent the quote's
- * existing title and description, so a new intro passed by the caller was
- * silently dropped.
+ * The Partner API PUT /jobs/:jobId/quotes/:quoteId (and /version/:n) accepts
+ * optional title and description, and saves an omitted one as null. The MCP
+ * used to always send the quote's existing title and description, so a new
+ * intro passed by the caller was silently dropped.
  *
  * FakeQuotesApi below applies the same omitted-means-null rule, so an update
- * that stops sending the current values clears them here as it would in prod.
- * Like the real server (AJV coerceTypes), it stores an explicit null as "".
+ * that stops sending the current values clears them here as it would against
+ * the API. Like the API, it stores an explicit null as "".
  */
 
 import { test, describe } from 'node:test';
