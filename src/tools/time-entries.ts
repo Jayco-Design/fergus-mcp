@@ -109,7 +109,7 @@ async function handleListTimeEntries(
   params.append('pageSize', pageSize.toString());
 
   // Extract job number and pass directly to filterJobNo
-  // The time entries API does exact match on internal_job_id (user-facing number)
+  // The time entries API matches the job number exactly
   if (filterJob) {
     const jobNo = extractJobNo(String(filterJob));
     if (!jobNo) {

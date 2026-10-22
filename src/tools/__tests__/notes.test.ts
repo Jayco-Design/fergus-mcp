@@ -3,9 +3,8 @@
  *
  * These guard the entityName translation in notes.ts: the MCP tool exposes
  * uppercase entity keys (JOB, JOB_PHASE, ...) everywhere, but POST /notes on
- * the Fergus partner API validates entityName against an anyOf of lowercase
- * consts (job, works_order, ...) - see fergus-partner-api's
- * src/routes/notes/schema.ts (NoteEntityType). CUS-1186 was exactly this
+ * the Fergus Partner API validates entityName against an anyOf of lowercase
+ * consts (job, works_order, ...). An earlier bug was exactly this
  * mismatch: create sent the uppercase key straight through and got a 400
  * ("must be equal to constant" x8) from every anyOf branch.
  *
@@ -21,7 +20,7 @@ import { handleManageNotes } from '../notes.js';
 import { FergusAPIError, type FergusClient } from '../../fergus-client.js';
 
 // The 8 entity types the manage-notes tool exposes, and the exact wire value
-// each must become on create. Mirrors fergus-partner-api's NoteEntityType enum.
+// each must become on create. Mirrors the Partner API's note entity names.
 const ENTITY_TYPES: Array<{ mcpName: string; wireValue: string }> = [
   { mcpName: 'JOB', wireValue: 'job' },
   { mcpName: 'CUSTOMER', wireValue: 'customer' },
@@ -36,8 +35,7 @@ const ENTITY_TYPES: Array<{ mcpName: string; wireValue: string }> = [
 /**
  * Minimal stand-in for the Fergus /notes API. Validates entityName the same
  * way the real anyOf-of-consts schema does on create, and stores notes so
- * list can read back what create wrote - the create-then-list round trip the
- * CUS-1186 acceptance criteria calls for.
+ * list can read back what create wrote - a create-then-list round trip.
  */
 class FakeNotesApi {
   private notes: any[] = [];
@@ -123,7 +121,7 @@ describe('manage-notes create', () => {
   }
 
   test('rejects an entityName the wire contract does not recognise (regression guard)', () => {
-    // Simulates the CUS-1186 bug directly: sending the uppercase MCP key
+    // Simulates the original bug directly: sending the uppercase MCP key
     // straight through as the wire value, unmapped.
     const api = new FakeNotesApi();
 
