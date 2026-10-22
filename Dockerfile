@@ -1,4 +1,4 @@
-FROM node:24.21.0-alpine AS dependencies
+FROM node:24.22.1-alpine AS dependencies
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN pnpm run build
 FROM dependencies AS production-dependencies
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-FROM node:24.21.0-alpine AS runtime
+FROM node:24.22.1-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
