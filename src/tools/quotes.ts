@@ -48,13 +48,21 @@ const quoteSectionSchema = {
             type: 'number',
             description: 'Cost per unit. Default: 0.',
           },
+          priceBookLineItemId: {
+            type: 'number',
+            description: 'Price book item ID (from manage-pricebooks search). For a line from the price book, send this and itemQuantity: the name, price, cost, sales account and labour flag come from the price book and the company\'s pricing tier, and any values sent for them are ignored.',
+          },
+          discountRate: {
+            type: 'number',
+            description: 'Line discount as a fraction of itemPrice, from 0 to 1: 0.1 means 10% off. itemPrice stays the undiscounted price.',
+          },
           salesAccountId: {
             type: 'number',
-            description: 'Sales account ID. Required for non-labour line items — use manage-pricebooks action search to find a valid salesAccountId. Do not use together with isLabour.',
+            description: 'Sales account ID for a one-off line. A one-off line needs exactly one of isLabour or salesAccountId, not both. Ignored when priceBookLineItemId is set.',
           },
           isLabour: {
             type: 'boolean',
-            description: 'Set to true for labour line items (no salesAccountId needed). Do not use together with salesAccountId.',
+            description: 'For a one-off line: true for labour, false for materials; the line then uses the company\'s default labour or materials sales account. A one-off line needs exactly one of isLabour or salesAccountId, not both. Ignored when priceBookLineItemId is set.',
           },
           sortOrder: {
             type: 'number',
@@ -145,7 +153,7 @@ export const manageQuotesToolDefinition = {
       // create/update/update-version params
       sections: {
         ...sectionsSchema,
-        description: 'Array of quote sections with line items. Replaces all existing sections on update. Each line item must have either salesAccountId (for materials/non-labour — look up via manage-pricebooks search) or isLabour: true (for labour), but not both. (required for: create, update, update-version)',
+        description: 'Array of quote sections with line items. Replaces all existing sections on update. For a line from the price book, send priceBookLineItemId (from manage-pricebooks search) and itemQuantity; the API fills in the rest. For a one-off line, send itemName and itemPrice, and exactly one of isLabour (true for labour, false for materials, using the company\'s default account for that type) or salesAccountId; the API rejects a one-off line with neither or both. (required for: create, update, update-version)',
       },
       // update-version params
       versionNumber: {
@@ -409,6 +417,27 @@ async function handleUpdateQuote(
 
 // ===== UPDATE QUOTE VERSION =====
 
+/**
+ * Finds a job's quote by version number. The quotes list is paged (10 by
+ * default) and there's no lookup by version, so read every page.
+ */
+async function findQuoteVersion(fergusClient: FergusClient, jobId: number, versionNumber: number) {
+  let cursor: string | null = null;
+  const seen = new Set<string>();
+  do {
+    const params = new URLSearchParams({ pageSize: '100' });
+    if (cursor) params.append('pageCursor', cursor);
+    const response: any = await fergusClient.get(`/jobs/${jobId}/quotes?${params.toString()}`);
+    const { data, pagination } = normalizeListResponse(response);
+    const match = data.find((q: any) => Number(q.versionNumber) === Number(versionNumber));
+    if (match) return match;
+    cursor = pagination.nextCursor;
+    if (cursor && seen.has(cursor)) break; // never loop on a repeated cursor
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  return undefined;
+}
+
 async function handleUpdateQuoteVersion(
   fergusClient: FergusClient,
   args: Record<string, any>
@@ -421,8 +450,7 @@ async function handleUpdateQuoteVersion(
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
 
   try {
-    const quotesResponse: any = await fergusClient.get(`/jobs/${jobId}/quotes`);
-    const targetQuote = quotesResponse.data.find((q: any) => q.versionNumber === versionNumber);
+    const targetQuote = await findQuoteVersion(fergusClient, jobId, versionNumber);
     if (!targetQuote) {
       throw new Error(`Quote version ${versionNumber} not found for job ${jobId}`);
     }

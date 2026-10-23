@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { resolveJobId } from './job-resolver.js';
 
 export const manageInvoicesToolDefinition = {
   name: 'manage-invoices',
@@ -29,8 +30,8 @@ export const manageInvoicesToolDefinition = {
         description: 'Filter by customer ID (for: list)',
       },
       jobId: {
-        type: 'number',
-        description: 'Filter by job ID (for: list)',
+        type: 'string',
+        description: 'Filter by job. Job number or API ID. Accepts "Job-500", "500", or an API ID. A job number that doesn\'t exist is reported as not found rather than returning an empty list. (for: list)',
       },
       invoiceNumber: {
         type: 'string',
@@ -95,7 +96,10 @@ async function handleListInvoices(fergusClient: FergusClient, args: Record<strin
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (customerId !== undefined) params.append('customerId', customerId.toString());
-  if (jobId !== undefined) params.append('jobId', jobId.toString());
+  if (jobId !== undefined && jobId !== null && jobId !== '') {
+    const { id } = await resolveJobId(fergusClient, String(jobId));
+    params.append('jobId', id.toString());
+  }
   if (invoiceNumber) params.append('invoiceNumber', invoiceNumber);
   if (dueBefore) params.append('dueBefore', dueBefore);
   if (dueAfter) params.append('dueAfter', dueAfter);
