@@ -58,11 +58,11 @@ const quoteSectionSchema = {
           },
           salesAccountId: {
             type: 'number',
-            description: 'Sales account ID for a one-off line. Optional: defaults to the company\'s default sales account for the line\'s type. Ignored when priceBookLineItemId is set. Do not use together with isLabour.',
+            description: 'Sales account ID for a one-off line. A one-off line needs exactly one of isLabour or salesAccountId, not both. Ignored when priceBookLineItemId is set.',
           },
           isLabour: {
             type: 'boolean',
-            description: 'Set to true for labour line items (no salesAccountId needed). Do not use together with salesAccountId.',
+            description: 'For a one-off line: true for labour, false for materials; the line then uses the company\'s default labour or materials sales account. A one-off line needs exactly one of isLabour or salesAccountId, not both. Ignored when priceBookLineItemId is set.',
           },
           sortOrder: {
             type: 'number',
@@ -153,7 +153,7 @@ export const manageQuotesToolDefinition = {
       // create/update/update-version params
       sections: {
         ...sectionsSchema,
-        description: 'Array of quote sections with line items. Replaces all existing sections on update. For a line from the price book, send priceBookLineItemId (from manage-pricebooks search) and itemQuantity; the API fills in the rest. For a one-off line, send itemName and itemPrice, and either isLabour: true for labour or optionally salesAccountId (defaults to the company\'s default sales account), not both. (required for: create, update, update-version)',
+        description: 'Array of quote sections with line items. Replaces all existing sections on update. For a line from the price book, send priceBookLineItemId (from manage-pricebooks search) and itemQuantity; the API fills in the rest. For a one-off line, send itemName and itemPrice, and exactly one of isLabour (true for labour, false for materials, using the company\'s default account for that type) or salesAccountId; the API rejects a one-off line with neither or both. (required for: create, update, update-version)',
       },
       // update-version params
       versionNumber: {

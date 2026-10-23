@@ -19,7 +19,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { handleManageJobs } from '../jobs.js';
-import { handleManageQuotes } from '../quotes.js';
+import { handleManageQuotes, manageQuotesToolDefinition } from '../quotes.js';
 import { handleManageInvoices } from '../invoices.js';
 import { FergusAPIError, type FergusClient } from '../../fergus-client.js';
 
@@ -246,6 +246,19 @@ describe('manage-quotes', () => {
 
     const post = api.writes.find((w) => w.method === 'POST');
     assert.deepEqual(post?.body.sections[0].lineItems[0], { priceBookLineItemId: 123456, itemQuantity: 4, discountRate: 0.1 });
+  });
+});
+
+describe('manage-quotes one-off line descriptions', () => {
+  // The API rejects a one-off line (no priceBookLineItemId) unless it has
+  // exactly one of isLabour or salesAccountId.
+  test('say a one-off line needs exactly one of isLabour or salesAccountId', () => {
+    const props: any = manageQuotesToolDefinition.inputSchema.properties;
+    const line = props.sections.items.properties.lineItems.items.properties;
+    for (const text of [props.sections.description, line.isLabour.description, line.salesAccountId.description]) {
+      assert.match(text, /exactly one of isLabour\b.*\bsalesAccountId/);
+      assert.doesNotMatch(text, /optional/i);
+    }
   });
 });
 
