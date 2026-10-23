@@ -70,7 +70,7 @@ export const manageUsersToolDefinition = {
       },
       address: {
         type: 'object',
-        description: 'User address (for: update)',
+        description: 'User address (for: update). Only address1 is required; fields left out keep their current values. Address fields can\'t be cleared: the API has no way to empty them, so leave a field out rather than sending it empty.',
         properties: {
           address1: { type: 'string', description: 'Address line 1' },
           address2: { type: 'string', description: 'Address line 2' },
@@ -80,7 +80,7 @@ export const manageUsersToolDefinition = {
           addressPostcode: { type: 'string', description: 'Postcode/ZIP' },
           addressCountry: { type: 'string', description: 'Country' },
         },
-        required: ['address1', 'address2', 'addressSuburb', 'addressCity', 'addressRegion', 'addressPostcode', 'addressCountry'],
+        required: ['address1'],
       },
       payRate: {
         type: 'number',
@@ -202,7 +202,35 @@ async function handleUpdateUser(
   const requestBody: any = {};
   if (firstName !== undefined) requestBody.firstName = firstName;
   if (lastName !== undefined) requestBody.lastName = lastName;
-  if (address !== undefined) requestBody.address = address;
+  if (address !== undefined) {
+    if (address === null || typeof address !== 'object' || Array.isArray(address)) {
+      throw new Error('address must be an object with at least address1. Nothing was changed.');
+    }
+    // The API keeps the current value of any field left out, and has no way to
+    // clear one: it rejects empty strings. Refuse an attempt to clear rather
+    // than dropping it and reporting success.
+    const cleared = Object.entries(address).filter(
+      ([, value]) => value === null || (typeof value === 'string' && value.trim() === '')
+    );
+    if (cleared.length > 0) {
+      const names = cleared.map(([key]) => `address.${key}`).join(', ');
+      throw new Error(
+        `${names} can't be cleared: the API has no way to empty an address field. Leave it out to keep its current value. Nothing was changed.`
+      );
+    }
+    if (address.address1 === undefined) {
+      throw new Error('address.address1 is required when updating a user\'s address. Nothing was changed.');
+    }
+    // The API takes text for every address field; send a number such as a
+    // postcode as text, and refuse anything else.
+    const sent: Record<string, string> = {};
+    for (const [key, value] of Object.entries(address)) {
+      if (typeof value === 'string') sent[key] = value;
+      else if (typeof value === 'number' && Number.isFinite(value)) sent[key] = String(value);
+      else throw new Error(`address.${key} must be text. Nothing was changed.`);
+    }
+    requestBody.address = sent;
+  }
   if (payRate !== undefined) requestBody.payRate = payRate;
   if (chargeOutRate !== undefined) requestBody.chargeOutRate = chargeOutRate;
   if (contactItems !== undefined) requestBody.contactItems = contactItems;

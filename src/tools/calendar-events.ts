@@ -12,7 +12,7 @@ const repeatEndTypeOptions = ['NEVER', 'ON_DATE', 'AFTER'] as const;
 
 export const manageCalendarEventsToolDefinition = {
   name: 'manage-calendar-events',
-  description: 'Manage calendar events. Actions: list, get, create, update, delete. All times are stored in UTC — when querying for a local date range, offset filterDateFrom/filterDateTo to account for the company timezone (e.g. for NZDT/UTC+13, subtract 13 hours from the local start/end). For list: send filterDateFrom with a timezone offset (e.g. 2026-03-27T00:00:00+13:00) so the partner API computes correct day boundaries. Use filterCalendarRange to control the date window (DAY, WEEK, etc.). Note: filterDateTo is not supported by the partner API and will be ignored. Updating: each person on an event has their own linked copy of it. When updating, first get the event and send back its current eventTitle (the title from get), startTime, endTime, userId and description along with the change. Take startTime and endTime from get, not from list: list shows each repeat of a repeating event at its own time. To put another person on an existing booking, find the people with manage-users (search by name) and the booking with list (by date, and user or job), then get it and update it with userId set to the userId from get (or, if the booking is unassigned, one of the people being added), linkedUserIds set to everyone who should be on it (including that person), and updateAllGrouped "TRUE". On a repeating event, also send updateAllRecurring "TRUE" (without repeatSplitOnDate) and its current repeat settings.',
+  description: 'Manage calendar events. Actions: list, get, create, update, delete. Event times (startTime, endTime) are in UTC. For list: send filterDateFrom as the local date with the company\'s UTC offset (e.g. 2026-03-27T00:00:00+13:00); day boundaries are taken in that offset. The company\'s time zone is in get-company-info, under settings, company_timezone. Use filterCalendarRange to control the date window (DAY, WEEK, etc.). List returns every event in the range at once, with no paging. Note: filterDateTo is not supported by the partner API and will be ignored. Updating: each person on an event has their own linked copy of it. When updating, first get the event and send back its current eventTitle (the title from get), startTime, endTime, userId and description along with the change. Take startTime and endTime from get, not from list: list shows each repeat of a repeating event at its own time. To put another person on an existing booking, find the people with manage-users (search by name) and the booking with list (by date, and user or job), then get it and update it with userId set to the userId from get (or, if the booking is unassigned, one of the people being added), linkedUserIds set to everyone who should be on it (including that person), and updateAllGrouped "TRUE". On a repeating event, also send updateAllRecurring "TRUE" (without repeatSplitOnDate) and its current repeat settings.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -28,7 +28,7 @@ export const manageCalendarEventsToolDefinition = {
       // list params
       filterDateFrom: {
         type: 'string',
-        description: 'Filter by start date in ISO 8601 format. Include a timezone offset for correct local date interpretation (e.g. 2026-03-27T00:00:00+13:00 for NZDT). If no offset is provided, the date is treated as UTC which may resolve to the wrong local day. Use get-company-info to find the company timezone. (for: list)',
+        description: 'Start of the range: the local date with the company\'s UTC offset, in ISO 8601 (e.g. 2026-03-27T00:00:00+13:00 for NZDT). Day boundaries are taken in that offset; without an offset the date is treated as UTC, which can give the wrong local day. The company\'s time zone is in get-company-info, under settings, company_timezone. (for: list)',
       },
       filterUserId: {
         type: 'string',
@@ -67,15 +67,6 @@ export const manageCalendarEventsToolDefinition = {
       filterActiveOnly: {
         type: 'boolean',
         description: 'Only return active events. (for: list)',
-      },
-      pageSize: {
-        type: 'number',
-        description: 'Max results per page (for: list, default: 50)',
-        default: 50,
-      },
-      pageCursor: {
-        type: 'string',
-        description: 'Pagination cursor (for: list)',
       },
       // create/update params
       eventTitle: {
@@ -199,11 +190,11 @@ async function handleListCalendarEvents(fergusClient: FergusClient, args: Record
     filterDateFrom, filterUserId, filterCalendarRange,
     filterCalendarEventType, filterJobId, filterJobPhaseId,
     filterJobEventsOnly, filterNonJobEventsOnly, filterUnassignedEventsOnly,
-    filterActiveOnly, pageSize = 50, pageCursor,
+    filterActiveOnly,
   } = args;
 
+  // The API has no paging for calendar events: it returns every event in the range.
   const params = new URLSearchParams();
-  params.append('pageSize', pageSize.toString());
   if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
   if (filterUserId) params.append('filterUserId', filterUserId);
   if (filterCalendarRange) params.append('filterCalendarRange', filterCalendarRange);
@@ -214,7 +205,6 @@ async function handleListCalendarEvents(fergusClient: FergusClient, args: Record
   if (filterNonJobEventsOnly !== undefined) params.append('filterNonJobEventsOnly', filterNonJobEventsOnly.toString());
   if (filterUnassignedEventsOnly !== undefined) params.append('filterUnassignedEventsOnly', filterUnassignedEventsOnly.toString());
   if (filterActiveOnly !== undefined) params.append('filterActiveOnly', filterActiveOnly.toString());
-  if (pageCursor) params.append('pageCursor', pageCursor);
 
   const events = await fergusClient.get(`/calendarEvents?${params.toString()}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(normalizeListResponse(events), null, 2) }] };
@@ -283,7 +273,9 @@ async function handleDeleteCalendarEvent(fergusClient: FergusClient, args: Recor
   if (args.deleteAllRecurring) requestBody.deleteAllRecurring = args.deleteAllRecurring;
   if (args.deleteAllGrouped) requestBody.deleteAllGrouped = args.deleteAllGrouped;
 
-  const hasBody = Object.keys(requestBody).length > 0;
-  const result = await fergusClient.delete(`/calendarEvents/${eventId}`, hasBody ? requestBody : undefined);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(result ?? { success: true }, null, 2) }] };
+  // The API requires a JSON object body, so send {} when there are no flags.
+  const result = await fergusClient.delete(`/calendarEvents/${eventId}`, requestBody);
+  // A successful delete has no content, which the client returns as {}.
+  const empty = result == null || (typeof result === 'object' && Object.keys(result as object).length === 0);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(empty ? { success: true } : result, null, 2) }] };
 }
