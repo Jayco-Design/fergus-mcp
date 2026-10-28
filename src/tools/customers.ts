@@ -6,12 +6,14 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { FergusClient } from '../fergus-client.js';
 import { formatResponse, isChatGPT, extractPagination } from '../utils/format-response.js';
-import { addressSchema, contactSchema } from './schemas.js';
+import { addressSchema, contactSchema, contactItemChangeProperties } from './schemas.js';
 import { contactEmail, contactPhone, mapAddress } from '../utils/fergus-mappers.js';
+import { applyContactItemChanges, assertContactItemInputs, hasContactItemChanges } from '../utils/contact-items.js';
+import { existingRecordResult } from '../utils/existing-record.js';
 
 export const manageCustomersToolDefinition = {
   name: 'manage-customers',
-  description: 'Manage customers. Actions: get, list, create, update, delete',
+  description: 'Manage customers. Actions: get, list, create, update, delete. Create returns alreadyExists with the existing customer when a customer with that name already exists; nothing is created, so tell the user and offer to update it if their details differ. On update, anything not mentioned stays as it is. To add, change or remove a single phone number or email on the main contact, use addContactItems, updateContactItems or removeContactItems.',
   _meta: {
     'openai/outputTemplate': 'ui://customers/customer-detail.html',
     'openai/toolInvocation/invoking': 'Loading customer data...',
@@ -27,7 +29,7 @@ export const manageCustomersToolDefinition = {
       },
       customerId: {
         type: 'string',
-        description: 'Customer ID (required for: get, update)',
+        description: 'Customer ID (required for: get, update, delete)',
       },
       // list params
       filterSearchText: {
@@ -58,13 +60,13 @@ export const manageCustomersToolDefinition = {
       // create/update params
       customerFullName: {
         type: 'string',
-        description: 'Full name of the customer (required for: create, update)',
+        description: 'Full name of the customer (required for: create; for update, kept if left out)',
       },
       mainContact: {
         ...contactSchema,
-        description: 'Main contact information (required for: create, update)',
-        required: ['firstName'],
+        description: 'Main contact information (required for: create). On update, fields left out are kept; mainContact.contactItems, if sent, replaces the list (keep existing items by their id from get).',
       },
+      ...contactItemChangeProperties,
       physicalAddress: {
         ...addressSchema,
         description: 'Physical address (for: create, update)',
@@ -180,17 +182,24 @@ async function handleCreateCustomer(
   args: Record<string, any>
 ) {
   const { customerFullName, mainContact, physicalAddress, postalAddress } = args;
-  if (!customerFullName || !mainContact) {
-    throw new Error('customerFullName and mainContact are required for create action');
+  if (!customerFullName || !mainContact?.firstName) {
+    throw new Error('customerFullName and mainContact (with firstName) are required for create action');
   }
 
   const requestBody: any = { customerFullName, mainContact };
   if (physicalAddress) requestBody.physicalAddress = physicalAddress;
   if (postalAddress) requestBody.postalAddress = postalAddress;
 
-  const customer = await fergusClient.post('/customers', requestBody);
+  const result = await fergusClient.createOrFindExisting('/customers', requestBody);
+  if (!result.created) {
+    return existingRecordResult(
+      fergusClient,
+      result.location,
+      `A customer named "${customerFullName}" already exists. Nothing was created; use update to change it.`
+    );
+  }
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(customer, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(result.body, null, 2) }],
   };
 }
 
@@ -200,12 +209,32 @@ async function handleUpdateCustomer(
   fergusClient: FergusClient,
   args: Record<string, any>
 ) {
-  const { customerId, customerFullName, mainContact, physicalAddress, postalAddress } = args;
-  if (!customerId || !customerFullName || !mainContact) {
-    throw new Error('customerId, customerFullName, and mainContact are required for update action');
+  const { customerId, customerFullName, physicalAddress, postalAddress } = args;
+  if (!customerId) {
+    throw new Error('customerId is required for update action');
+  }
+  const mainContactArg = args.mainContact ?? {};
+  assertContactItemInputs({ ...args, contactItems: mainContactArg.contactItems }, 'update');
+  const changesItems = hasContactItemChanges(args);
+
+  // PUT /customers/:id needs customerFullName and mainContact.firstName, so read
+  // the customer for whatever the caller didn't send. Main contact fields left
+  // out are kept by the API, and its contact items are only replaced when sent.
+  let current: any;
+  if (!customerFullName || !mainContactArg.firstName || changesItems) {
+    const response: any = await fergusClient.get(`/customers/${customerId}`);
+    current = response?.data ?? response;
   }
 
-  const requestBody: any = { customerFullName, mainContact };
+  const mainContact: any = { ...mainContactArg, firstName: mainContactArg.firstName || current?.mainContact?.firstName };
+  if (!mainContact.firstName) {
+    throw new Error(`Customer ${customerId}'s main contact has no first name on record; send mainContact.firstName. Nothing was changed.`);
+  }
+  if (changesItems) {
+    mainContact.contactItems = applyContactItemChanges(current?.mainContact?.contactItems, args, 'update');
+  }
+
+  const requestBody: any = { customerFullName: customerFullName || current?.customerFullName, mainContact };
   if (physicalAddress) requestBody.physicalAddress = physicalAddress;
   if (postalAddress) requestBody.postalAddress = postalAddress;
 

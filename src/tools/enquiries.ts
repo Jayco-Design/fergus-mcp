@@ -64,11 +64,11 @@ export const manageEnquiriesToolDefinition = {
       email: {
         type: 'string',
         format: 'email',
-        description: 'Email address of the enquirer (required for: create)',
+        description: 'Email address of the enquirer (for: create; an email or a phone number is required)',
       },
       phoneNumber: {
         type: 'string',
-        description: 'Phone number of the enquirer (required for: create)',
+        description: 'Phone number of the enquirer (for: create; an email or a phone number is required)',
       },
       description: {
         type: 'string',
@@ -80,7 +80,7 @@ export const manageEnquiriesToolDefinition = {
       },
       address1: {
         type: 'string',
-        description: 'Address line 1 (required for: create)',
+        description: 'Address line 1 (for: create). The address is optional, but recommended so the enquiry can be shown on the map.',
       },
       address2: {
         type: 'string',
@@ -92,7 +92,7 @@ export const manageEnquiriesToolDefinition = {
       },
       addressCity: {
         type: 'string',
-        description: 'City (required for: create)',
+        description: 'City (for: create)',
       },
       addressRegion: {
         type: 'string',
@@ -161,16 +161,16 @@ async function handleListEnquiries(fergusClient: FergusClient, args: Record<stri
 
 const REQUIRED_CREATE_FIELDS = [
   'name',
-  'email',
-  'phoneNumber',
   'description',
   'source',
-  'address1',
-  'addressCity',
 ] as const;
 
 const OPTIONAL_CREATE_FIELDS = [
+  'email',
+  'phoneNumber',
+  'address1',
   'address2',
+  'addressCity',
   'addressSuburb',
   'addressRegion',
   'addressPostcode',
@@ -182,12 +182,15 @@ async function handleCreateEnquiry(fergusClient: FergusClient, args: Record<stri
   if (missing.length > 0) {
     throw new Error(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required for create action`);
   }
+  if (!args.email?.toString().trim() && !args.phoneNumber?.toString().trim()) {
+    throw new Error('an email or a phone number is required for create action');
+  }
 
   const requestBody: any = {};
   for (const field of REQUIRED_CREATE_FIELDS) {
     requestBody[field] = args[field];
   }
-  // The API rejects blank strings on address fields, so only send ones with a value
+  // The API rejects blank strings on these fields, so only send ones with a value
   for (const field of OPTIONAL_CREATE_FIELDS) {
     if (args[field]?.toString().trim()) requestBody[field] = args[field];
   }
