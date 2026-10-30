@@ -2,11 +2,11 @@
  * Tests for the bodyless action endpoints: manage-jobs finalize and
  * manage-sites archive/restore.
  *
- * fergus-partner-api's finaliseJobSchema, archiveSiteSchema and
- * restoreSiteSchema only accept Content-Type: text/plain. CUS-1403 was the MCP
- * sending these with FergusClient's default application/json and a "{}" body,
- * so every finalize/archive/restore failed with a 400 ("The Content-Type must
- * be 'text/plain'") before reaching Fergus.
+ * The Partner API's finalise, archive and restore endpoints only accept
+ * Content-Type: text/plain. The bug fixed here was the MCP sending these
+ * with FergusClient's default application/json and a "{}" body, so every
+ * finalize/archive/restore failed with a 400 ("The Content-Type must be
+ * 'text/plain'") before reaching Fergus.
  *
  * These run the real FergusClient against a stubbed fetch that enforces the
  * same header rule, so a regression fails here the way it fails in prod.

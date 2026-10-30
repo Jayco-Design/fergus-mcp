@@ -3,12 +3,12 @@
  * Resolves user-facing job references (e.g. "Job-500", "500") to API IDs.
  *
  * Fergus jobs have two identifiers:
- * - jobNo (internal_job_id): human-readable number shown in the UI (e.g. "500" displayed as "Job-500")
+ * - jobNo: human-readable number shown in the UI (e.g. "500" displayed as "Job-500")
  * - id: internal API identifier (e.g. 20701539)
  *
  * Users always refer to jobs by jobNo. This utility resolves jobNo → id.
- * The jobs API supports filterJobNo (LIKE match on internal_job_id, indexed).
- * The timeEntries API filterJobNo does exact match on internal_job_id.
+ * The jobs API's filterJobNo matches job numbers containing the digits.
+ * The timeEntries API's filterJobNo matches the job number exactly.
  */
 
 import { FergusClient } from '../fergus-client.js';
@@ -43,7 +43,7 @@ export function looksLikeJobNo(input: string): boolean {
 /**
  * Resolve a job reference to an API ID.
  * If the input already looks like an API ID, returns it as-is.
- * Otherwise uses filterJobNo (LIKE on internal_job_id) to find exact match.
+ * Otherwise searches with filterJobNo and picks the exact match.
  */
 export async function resolveJobId(
   fergusClient: FergusClient,
@@ -60,14 +60,26 @@ export async function resolveJobId(
     return { id: parseInt(jobNo), jobNo: jobNo };
   }
 
-  // Use filterJobNo which does LIKE match on internal_job_id (indexed)
-  const response: any = await fergusClient.get(`/jobs?pageSize=10&filterJobNo=${jobNo}`);
-  const jobs = response.data || [];
+  // filterJobNo matches job numbers containing the digits. The
+  // jobs list leaves out archived (including on-hold) jobs unless
+  // filterShowArchived is set, and then returns only archived ones, so look in
+  // active jobs first and archived ones second.
+  //
+  // A search for "5" also returns 15, 50, 105 and so on, in creation order
+  // by default, so a short job number can fall past the first page. Sorting by
+  // job number ascending puts the exact match first: every other number that
+  // contains the digits is larger.
+  for (const archived of [false, true]) {
+    const response: any = await fergusClient.get(
+      `/jobs?pageSize=10&sortField=jobNo&sortOrder=asc&filterJobNo=${jobNo}${archived ? '&filterShowArchived=true' : ''}`
+    );
+    const jobs = response.data || [];
 
-  // filterJobNo is LIKE-based, so find the exact match
-  const match = jobs.find((j: any) => String(j.jobNo) === jobNo);
-  if (match) {
-    return { id: match.id, jobNo: match.jobNo };
+    // filterJobNo isn't exact, so find the exact match
+    const match = jobs.find((j: any) => String(j.jobNo) === jobNo);
+    if (match) {
+      return { id: match.id, jobNo: match.jobNo };
+    }
   }
 
   throw new Error(

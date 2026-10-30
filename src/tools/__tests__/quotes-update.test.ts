@@ -36,10 +36,12 @@ class FakeQuotesApi {
   puts: Array<{ endpoint: string; body: any }> = [];
 
   get(endpoint: string) {
-    if (endpoint === `/jobs/${JOB_ID}/quotes/${QUOTE_ID}`) {
+    // Match on the path only: list calls carry paging parameters.
+    const path = endpoint.split('?')[0];
+    if (path === `/jobs/${JOB_ID}/quotes/${QUOTE_ID}`) {
       return { result: 'success', data: { ...this.quote } };
     }
-    if (endpoint === `/jobs/${JOB_ID}/quotes`) {
+    if (path === `/jobs/${JOB_ID}/quotes`) {
       return { result: 'success', data: [{ id: QUOTE_ID, versionNumber: VERSION_NUMBER }] };
     }
     throw new Error(`unexpected GET ${endpoint}`);
