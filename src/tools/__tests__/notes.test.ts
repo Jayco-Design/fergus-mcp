@@ -1,16 +1,13 @@
 /**
  * Tests for manage-notes create/list.
  *
- * These guard the entityName translation in notes.ts: the MCP tool exposes
- * uppercase entity keys (JOB, JOB_PHASE, ...) everywhere, but POST /notes on
- * the Fergus Partner API validates entityName against an anyOf of lowercase
- * consts (job, works_order, ...). An earlier bug was exactly this
- * mismatch: create sent the uppercase key straight through and got a 400
- * ("must be equal to constant" x8) from every anyOf branch.
+ * The tool uses the API's uppercase entity keys (JOB, JOB_PHASE, ...)
+ * everywhere. POST /notes on the Partner API accepts those keys; its older
+ * lowercase values (job, works_order, ...) are still accepted but deprecated,
+ * so the tool must send the uppercase key unchanged.
  *
- * FakeNotesApi below enforces that same lowercase-const contract, so a
- * regression that starts sending the wrong entityName value fails here the
- * same way it fails against the real API, instead of only surfacing in prod.
+ * FakeNotesApi below follows that contract, records the value sent on the
+ * wire, and stores notes so list can read back what create wrote.
  */
 
 import { test, describe } from 'node:test';
@@ -19,8 +16,8 @@ import assert from 'node:assert/strict';
 import { handleManageNotes } from '../notes.js';
 import { FergusAPIError, type FergusClient } from '../../fergus-client.js';
 
-// The 8 entity types the manage-notes tool exposes, and the exact wire value
-// each must become on create. Mirrors the Partner API's note entity names.
+// The 8 entity types the manage-notes tool exposes, and the API's deprecated
+// lowercase value for each. Mirrors the Partner API's note entity names.
 const ENTITY_TYPES: Array<{ mcpName: string; wireValue: string }> = [
   { mcpName: 'JOB', wireValue: 'job' },
   { mcpName: 'CUSTOMER', wireValue: 'customer' },
@@ -33,30 +30,29 @@ const ENTITY_TYPES: Array<{ mcpName: string; wireValue: string }> = [
 ];
 
 /**
- * Minimal stand-in for the Fergus /notes API. Validates entityName the same
- * way the real anyOf-of-consts schema does on create, and stores notes so
- * list can read back what create wrote - a create-then-list round trip.
+ * Minimal stand-in for the Fergus /notes API. Accepts the uppercase key (or
+ * the deprecated lowercase value) on create, records what was sent, and
+ * stores notes so list can read back what create wrote.
  */
 class FakeNotesApi {
   private notes: any[] = [];
   private nextId = 1;
+  sentEntityNames: string[] = [];
 
   create(body: Record<string, any>) {
-    const wireValueToMcpName = Object.fromEntries(
-      ENTITY_TYPES.map((e) => [e.wireValue, e.mcpName])
+    this.sentEntityNames.push(body.entityName);
+    const toKey = Object.fromEntries(
+      ENTITY_TYPES.flatMap((e) => [[e.mcpName, e.mcpName], [e.wireValue, e.mcpName]])
     );
-    if (!(body.entityName in wireValueToMcpName)) {
-      throw new FergusAPIError(
-        'API request failed: Bad Request',
-        400,
-        'Validation Failed: [<body/entityName>: must be equal to constant] x8, ' +
-          '[<body/entityName>: must match a schema in anyOf]'
-      );
+    if (!(body.entityName in toKey)) {
+      throw new FergusAPIError('API request failed: Bad Request', 400, {
+        message: 'Validation Failed: [<body/entityName>: must be equal to one of the allowed values]',
+      });
     }
 
     const note = {
       id: this.nextId++,
-      entityName: wireValueToMcpName[body.entityName],
+      entityName: toKey[body.entityName],
       entityId: body.entityId,
       text: body.text,
       isPinned: body.isPinned,
@@ -94,7 +90,7 @@ function fakeClient(api: FakeNotesApi): FergusClient {
 
 describe('manage-notes create', () => {
   for (const { mcpName, wireValue } of ENTITY_TYPES) {
-    test(`creates a note for entityName=${mcpName} (sends "${wireValue}" on the wire) and it shows up in list`, async () => {
+    test(`creates a note for entityName=${mcpName} (sends ${mcpName}, not the deprecated "${wireValue}") and it shows up in list`, async () => {
       const api = new FakeNotesApi();
       const client = fakeClient(api);
 
@@ -105,6 +101,7 @@ describe('manage-notes create', () => {
         text: 'Need to create a new quote. Scope has changed',
       });
       const created = JSON.parse(createResult.content[0].text);
+      assert.deepEqual(api.sentEntityNames, [mcpName]);
       assert.equal(created.entityName, mcpName);
       assert.equal(created.entityId, 42);
 
@@ -120,15 +117,14 @@ describe('manage-notes create', () => {
     });
   }
 
-  test('rejects an entityName the wire contract does not recognise (regression guard)', () => {
-    // Simulates the original bug directly: sending the uppercase MCP key
-    // straight through as the wire value, unmapped.
+  test('rejects an unknown entityName before calling the API', async () => {
     const api = new FakeNotesApi();
 
-    assert.throws(
-      () => api.create({ entityName: 'JOB', entityId: 1, text: 'x', isPinned: false, parentId: null }),
-      FergusAPIError
+    await assert.rejects(
+      () => handleManageNotes(fakeClient(api), { action: 'create', entityName: 'works_order', entityId: 1, text: 'x' }),
+      /Unknown entityName: works_order/
     );
+    assert.equal(api.sentEntityNames.length, 0);
   });
 
   test('defaults isPinned to false and parentId to null when omitted', async () => {

@@ -9,7 +9,7 @@ export const addressSchema = {
   properties: {
     address1: {
       type: 'string',
-      description: 'Address line 1',
+      description: 'Address line 1. Required whenever an address is sent.',
     },
     address2: {
       type: 'string',
@@ -36,6 +36,7 @@ export const addressSchema = {
       description: 'Country',
     },
   },
+  required: ['address1'],
 };
 
 export const contactItemSchema = {

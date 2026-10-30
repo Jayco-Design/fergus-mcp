@@ -6,6 +6,10 @@
 import { FergusClient } from '../fergus-client.js';
 import { resolveJobId } from './job-resolver.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for this list. */
+const JOB_SORT_FIELDS = ['jobNo', 'createdAt', 'lastModified'] as const;
 
 const jobStatusOptions = ['Active', 'Completed', 'Estimate Rejected', 'Estimate Sent', 'Inactive', 'Quote Sent', 'Quote Rejected', 'To Price'] as const;
 const jobTypeOptions = ['Quote', 'Estimate', 'Charge Up'] as const;
@@ -40,6 +44,15 @@ export const manageJobsToolDefinition = {
         type: 'string',
         description: 'Filter by job number such as "500". Supports partial match. (for: list)',
       },
+      filterPhaseStatus: {
+        type: 'string',
+        enum: ['To Schedule', 'To Start', 'In Progress', 'Labour Complete', 'To Invoice', 'To Be Approved', 'Invoiced'],
+        description: 'Only phases with this status (for: list-phases)',
+      },
+      filterUpdatedSince: {
+        type: 'string',
+        description: 'Only phases updated at or after this ISO 8601 date-time, e.g. 2026-01-21T00:00:00.000Z (for: list-phases)',
+      },
       filterJobStatus: {
         type: 'string',
         description: 'Filter by Fergus job status. (for: list)',
@@ -71,11 +84,14 @@ export const manageJobsToolDefinition = {
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Maximum number of jobs to return. Default: 50. (for: list)',
         default: 50,
       },
       sortField: {
         type: 'string',
+        enum: [...JOB_SORT_FIELDS],
         description: 'Field to sort by. Default: createdAt. (for: list)',
         default: 'createdAt',
       },
@@ -213,6 +229,8 @@ async function handleListJobs(
     sortOrder = 'desc',
     pageCursor = '0',
   } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, JOB_SORT_FIELDS);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
@@ -398,7 +416,11 @@ async function handleListPhases(
   }
 
   const { id: jobId } = await resolveJobId(fergusClient, String(jobRef));
-  const phases = await fergusClient.get(`/jobs/${jobId}/phases`);
+  const params = new URLSearchParams();
+  if (args.filterPhaseStatus) params.append('filterStatus', args.filterPhaseStatus);
+  if (args.filterUpdatedSince) params.append('filterUpdatedSince', args.filterUpdatedSince);
+  const query = params.toString();
+  const phases = await fergusClient.get(`/jobs/${jobId}/phases${query ? `?${query}` : ''}`);
   return {
     content: [
       {

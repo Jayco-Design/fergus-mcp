@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkPageSize } from '../utils/list-params.js';
 
 export const managePricingTiersToolDefinition = {
   name: 'manage-pricing-tiers',
@@ -26,6 +27,8 @@ export const managePricingTiersToolDefinition = {
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 50)',
         default: 50,
       },
@@ -54,6 +57,7 @@ export async function handleManagePricingTiers(
 
 async function handleListPricingTiers(fergusClient: FergusClient, args: Record<string, any>) {
   const { pageSize = 50, pageCursor } = args;
+  checkPageSize(pageSize);
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (pageCursor) params.append('pageCursor', pageCursor);

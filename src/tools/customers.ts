@@ -10,6 +10,10 @@ import { addressSchema, contactSchema, contactItemChangeProperties } from './sch
 import { contactEmail, contactPhone, mapAddress } from '../utils/fergus-mappers.js';
 import { applyContactItemChanges, assertContactItemInputs, hasContactItemChanges } from '../utils/contact-items.js';
 import { existingRecordResult } from '../utils/existing-record.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for this list. */
+const CUSTOMER_SORT_FIELDS = ['name', 'createdAt'] as const;
 
 export const manageCustomersToolDefinition = {
   name: 'manage-customers',
@@ -38,11 +42,14 @@ export const manageCustomersToolDefinition = {
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 10)',
         default: 10,
       },
       sortField: {
         type: 'string',
+        enum: [...CUSTOMER_SORT_FIELDS],
         description: 'Field to sort by (for: list, default: createdAt)',
         default: 'createdAt',
       },
@@ -150,6 +157,8 @@ async function handleListCustomers(
     sortOrder = 'asc',
     pageCursor = '0',
   } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, CUSTOMER_SORT_FIELDS);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());

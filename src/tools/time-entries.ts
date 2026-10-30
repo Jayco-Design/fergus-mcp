@@ -6,6 +6,10 @@
 import { FergusClient } from '../fergus-client.js';
 import { extractJobNo } from './job-resolver.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for this list. */
+const TIME_ENTRY_SORT_FIELDS = ['timeEntryDate', 'jobNo', 'user'] as const;
 
 export const manageTimeEntriesToolDefinition = {
   name: 'manage-time-entries',
@@ -52,11 +56,14 @@ export const manageTimeEntriesToolDefinition = {
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 50)',
         default: 50,
       },
       sortField: {
         type: 'string',
+        enum: [...TIME_ENTRY_SORT_FIELDS],
         description: 'Field to sort by (for: list)',
       },
       sortOrder: {
@@ -104,6 +111,8 @@ async function handleListTimeEntries(
     sortOrder,
     pageCursor,
   } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, TIME_ENTRY_SORT_FIELDS);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
