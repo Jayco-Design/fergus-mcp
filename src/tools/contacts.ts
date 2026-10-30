@@ -7,6 +7,10 @@ import { FergusClient } from '../fergus-client.js';
 import { contactItemSchema, contactItemChangeProperties } from './schemas.js';
 import { normalizeListResponse } from '../utils/format-response.js';
 import { applyContactItemChanges, assertContactItemInputs } from '../utils/contact-items.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for this list. */
+const CONTACT_SORT_FIELDS = ['firstName', 'lastName', 'createdAt'] as const;
 
 export const manageContactsToolDefinition = {
   name: 'manage-contacts',
@@ -28,13 +32,29 @@ export const manageContactsToolDefinition = {
         type: 'string',
         description: 'Search text to filter contacts (for: list)',
       },
+      filterContactType: {
+        type: 'string',
+        enum: ['CUSTOMER', 'SITE'],
+        description: 'Only customer contacts or only site contacts (for: list)',
+      },
+      filterCustomerId: {
+        type: 'number',
+        description: 'Only contacts of this customer (for: list)',
+      },
+      filterSiteId: {
+        type: 'number',
+        description: 'Only contacts of this site (for: list)',
+      },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 50)',
         default: 50,
       },
       sortField: {
         type: 'string',
+        enum: [...CONTACT_SORT_FIELDS],
         description: 'Field to sort by (for: list)',
       },
       sortOrder: {
@@ -127,11 +147,16 @@ async function handleGetContact(fergusClient: FergusClient, args: Record<string,
 }
 
 async function handleListContacts(fergusClient: FergusClient, args: Record<string, any>) {
-  const { filterSearchText, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  const { filterSearchText, filterContactType, filterCustomerId, filterSiteId, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, CONTACT_SORT_FIELDS);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
+  if (filterContactType) params.append('filterContactType', filterContactType);
+  if (filterCustomerId !== undefined && filterCustomerId !== null) params.append('filterCustomerId', String(filterCustomerId));
+  if (filterSiteId !== undefined && filterSiteId !== null) params.append('filterSiteId', String(filterSiteId));
   if (sortField) params.append('sortField', sortField);
   if (sortOrder) params.append('sortOrder', sortOrder);
   if (pageCursor) params.append('pageCursor', pageCursor);

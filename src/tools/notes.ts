@@ -6,6 +6,7 @@
 import { FergusClient } from '../fergus-client.js';
 import { resolveJobId } from './job-resolver.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkPageSize } from '../utils/list-params.js';
 
 export const manageNotesToolDefinition = {
   name: 'manage-notes',
@@ -72,7 +73,7 @@ export const manageNotesToolDefinition = {
       },
       isPinned: {
         type: 'boolean',
-        description: 'Pin the note. Defaults to false for create; toggles pin status for update. (for: create, update)',
+        description: 'Whether the note is pinned: true pins it, false unpins it. Defaults to false on create. (for: create, update)',
       },
 
       // ── update ──────────────────────────────────────────────────────────────
@@ -86,21 +87,11 @@ export const manageNotesToolDefinition = {
 };
 
 /**
- * The API is asymmetric about entity names: GET /notes filters on the uppercase
- * key (JOB, JOB_PHASE) and responses come back in that same form, but POST /notes
- * validates against the underlying value (job, works_order). We expose the
- * uppercase key everywhere and translate on the way in to create.
+ * Entity names the tool accepts. The API uses these uppercase keys everywhere:
+ * GET /notes filters on them, responses use them, and POST /notes accepts
+ * them (its older lowercase values, such as works_order, are deprecated).
  */
-const ENTITY_NAME_TO_CREATE_VALUE: Record<string, string> = {
-  JOB: 'job',
-  CUSTOMER: 'customer',
-  CUSTOMER_INVOICE: 'customer_invoice',
-  QUOTE: 'quote',
-  SITE: 'site',
-  TASK: 'task',
-  ENQUIRY: 'enquiry',
-  JOB_PHASE: 'works_order',
-};
+const NOTE_ENTITY_NAMES = ['JOB', 'CUSTOMER', 'CUSTOMER_INVOICE', 'QUOTE', 'SITE', 'TASK', 'ENQUIRY', 'JOB_PHASE'] as const;
 
 export async function handleManageNotes(
   fergusClient: FergusClient,
@@ -120,6 +111,7 @@ export async function handleManageNotes(
 
 async function handleListNotes(fergusClient: FergusClient, args: Record<string, any>) {
   const { filterEntityName, filterEntityId, filterJobRef, filterCreatedById, pageSize = 50, pageCursor } = args;
+  checkPageSize(pageSize);
 
   let entityName = filterEntityName;
   let entityId = filterEntityId;
@@ -143,7 +135,7 @@ async function handleListNotes(fergusClient: FergusClient, args: Record<string, 
     throw new Error(
       `${missing.join(' and ')} ${missing.length === 1 ? 'is' : 'are'} required for list — ` +
         'notes must be scoped to a specific entity. Pass filterEntityName ' +
-        `(one of: ${Object.keys(ENTITY_NAME_TO_CREATE_VALUE).join(', ')}) together with ` +
+        `(one of: ${NOTE_ENTITY_NAMES.join(', ')}) together with ` +
         'filterEntityId, or pass filterJobRef as a shortcut for job notes.'
     );
   }
@@ -168,16 +160,15 @@ async function handleCreateNote(fergusClient: FergusClient, args: Record<string,
   if (!entityName) throw new Error('entityName is required for create');
   if (entityId === undefined || entityId === null) throw new Error('entityId is required for create');
 
-  const createEntityName = ENTITY_NAME_TO_CREATE_VALUE[entityName];
-  if (!createEntityName) {
+  if (!(NOTE_ENTITY_NAMES as readonly string[]).includes(entityName)) {
     throw new Error(
-      `Unknown entityName: ${entityName}. One of: ${Object.keys(ENTITY_NAME_TO_CREATE_VALUE).join(', ')}`
+      `Unknown entityName: ${entityName}. One of: ${NOTE_ENTITY_NAMES.join(', ')}`
     );
   }
 
   const payload: Record<string, any> = {
     text,
-    entityName: createEntityName,
+    entityName,
     entityId,
     isPinned: isPinned ?? false,
     parentId: parentId ?? null,

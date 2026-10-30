@@ -6,6 +6,10 @@
 import { FergusClient } from '../fergus-client.js';
 import { normalizeListResponse } from '../utils/format-response.js';
 import { resolveJobId } from './job-resolver.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for this list. */
+const INVOICE_SORT_FIELDS = ['id', 'createdAt', 'dueDate'] as const;
 
 export const manageInvoicesToolDefinition = {
   name: 'manage-invoices',
@@ -45,13 +49,21 @@ export const manageInvoicesToolDefinition = {
         type: 'string',
         description: 'Filter invoices due after this ISO 8601 datetime (for: list)',
       },
+      filterDirectDebitStatus: {
+        type: 'string',
+        enum: ['processing', 'succeeded', 'failed'],
+        description: 'Only invoices whose direct debit payment is in this state (for: list)',
+      },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 50)',
         default: 50,
       },
       sortField: {
         type: 'string',
+        enum: [...INVOICE_SORT_FIELDS],
         description: 'Field to sort by (for: list)',
       },
       sortOrder: {
@@ -91,7 +103,9 @@ async function handleGetInvoice(fergusClient: FergusClient, args: Record<string,
 }
 
 async function handleListInvoices(fergusClient: FergusClient, args: Record<string, any>) {
-  const { customerId, jobId, invoiceNumber, dueBefore, dueAfter, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  const { customerId, jobId, invoiceNumber, dueBefore, dueAfter, filterDirectDebitStatus, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, INVOICE_SORT_FIELDS);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
@@ -103,6 +117,7 @@ async function handleListInvoices(fergusClient: FergusClient, args: Record<strin
   if (invoiceNumber) params.append('invoiceNumber', invoiceNumber);
   if (dueBefore) params.append('dueBefore', dueBefore);
   if (dueAfter) params.append('dueAfter', dueAfter);
+  if (filterDirectDebitStatus) params.append('filterDirectDebitStatus', filterDirectDebitStatus);
   if (sortField) params.append('sortField', sortField);
   if (sortOrder) params.append('sortOrder', sortOrder);
   if (pageCursor) params.append('pageCursor', pageCursor);

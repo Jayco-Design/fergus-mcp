@@ -8,6 +8,10 @@ import { mapAddress, mapContact } from '../utils/fergus-mappers.js';
 import { existingRecordResult } from '../utils/existing-record.js';
 import { addressSchema, contactSchema } from './schemas.js';
 import { extractPagination } from '../utils/format-response.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for this list. */
+const SITE_SORT_FIELDS = ['name', 'createdAt'] as const;
 
 export const manageSitesToolDefinition = {
   name: 'manage-sites',
@@ -43,11 +47,14 @@ export const manageSitesToolDefinition = {
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 10)',
         default: 10,
       },
       sortField: {
         type: 'string',
+        enum: [...SITE_SORT_FIELDS],
         description: 'Field to sort by (for: list, default: name)',
         default: 'name',
       },
@@ -144,6 +151,8 @@ async function handleListSites(
     sortOrder = 'asc',
     pageCursor = '0',
   } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, SITE_SORT_FIELDS);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());

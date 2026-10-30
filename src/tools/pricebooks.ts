@@ -5,8 +5,15 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkPageSize } from '../utils/list-params.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** Supplier ID of the company's custom price book: items not from a supplier's price book. */
+const CUSTOM_PRICE_BOOK_SUPPLIER_ID = 0;
+
+/** Safety limit on price book pages read when resolving suppliers (100 per page). */
+const MAX_PRICEBOOK_PAGES = 50;
 
 interface PricebookEntry {
   id: number;
@@ -14,28 +21,48 @@ interface PricebookEntry {
   supplierId: number;
 }
 
-interface CacheEntry {
+interface PricebookList {
   pricebooks: PricebookEntry[];
+  /** False when not every page could be read, so a missing supplier may still exist. */
+  complete: boolean;
+}
+
+interface CacheEntry extends PricebookList {
   expiresAt: number;
 }
 
 const pricebookCache = new WeakMap<FergusClient, CacheEntry>();
 
-async function getCachedPricebooks(fergusClient: FergusClient): Promise<PricebookEntry[]> {
+async function getCachedPricebooks(fergusClient: FergusClient): Promise<PricebookList> {
   const cached = pricebookCache.get(fergusClient);
   if (cached && Date.now() < cached.expiresAt) {
-    return cached.pricebooks;
+    return { pricebooks: cached.pricebooks, complete: cached.complete };
   }
 
-  const response = await fergusClient.get<any>('/pricebooks?pageSize=100');
-  const pricebooks: PricebookEntry[] = (response?.data ?? []).map((pb: any) => ({
-    id: pb.id,
-    supplierName: pb.supplierName,
-    supplierId: pb.supplierId,
-  }));
+  // Read every page: a company can have more than 100 price books.
+  const pricebooks: PricebookEntry[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  let complete = false;
+  for (let page = 0; page < MAX_PRICEBOOK_PAGES; page++) {
+    const params = new URLSearchParams({ pageSize: '100' });
+    if (cursor) params.append('pageCursor', cursor);
+    const response = await fergusClient.get<any>(`/pricebooks?${params.toString()}`);
+    const { data, pagination } = normalizeListResponse(response);
+    for (const pb of data) {
+      pricebooks.push({ id: pb.id, supplierName: pb.supplierName, supplierId: pb.supplierId });
+    }
+    cursor = pagination.nextCursor;
+    if (!cursor) {
+      complete = true;
+      break;
+    }
+    if (seenCursors.has(cursor)) break; // never loop on a repeated cursor
+    seenCursors.add(cursor);
+  }
 
-  pricebookCache.set(fergusClient, { pricebooks, expiresAt: Date.now() + CACHE_TTL_MS });
-  return pricebooks;
+  pricebookCache.set(fergusClient, { pricebooks, complete, expiresAt: Date.now() + CACHE_TTL_MS });
+  return { pricebooks, complete };
 }
 
 export const managePricebooksToolDefinition = {
@@ -63,7 +90,7 @@ export const managePricebooksToolDefinition = {
       // list/search params
       searchText: {
         type: 'string',
-        description: 'Search text, min 3 chars. Searches name, productCode, supplierSku. (required for: search)',
+        description: 'Search text, at least 3 characters. Searches name, productCode, supplierSku. (required for: search)',
       },
       pricingTierId: {
         type: 'number',
@@ -81,10 +108,20 @@ export const managePricebooksToolDefinition = {
       supplierIds: {
         type: 'array',
         items: { type: 'number' },
-        description: 'Array of supplier IDs, NOT pricebook IDs (`pricebook.id`). Prefer `supplierNames` when the supplier name is known. Passing a pricebook ID instead of a supplierID throws a structured error with the correct value.',
+        description: 'Array of supplier IDs, NOT pricebook IDs (`pricebook.id`). 0 is the company\'s custom price book: items that aren\'t from a supplier\'s price book. Prefer `supplierNames` when the supplier name is known. Passing a pricebook ID instead of a supplierID throws a structured error with the correct value.',
+      },
+      filterSupplierName: {
+        type: 'string',
+        description: 'Only price books whose supplier name contains this text (for: list)',
+      },
+      filterPricingTierId: {
+        type: 'number',
+        description: 'Pricing tier ID to price the item with (for: get-item). Defaults to the default tier if omitted.',
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, list-items, search, default: 50)',
         default: 50,
       },
@@ -118,9 +155,11 @@ export async function handleManagePricebooks(
 }
 
 async function handleListPricebooks(fergusClient: FergusClient, args: Record<string, any>) {
-  const { pageSize = 50, pageCursor } = args;
+  const { pageSize = 50, pageCursor, filterSupplierName } = args;
+  checkPageSize(pageSize);
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
+  if (filterSupplierName) params.append('filterSupplierName', filterSupplierName);
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const pricebooks = await fergusClient.get(`/pricebooks?${params.toString()}`);
@@ -137,6 +176,7 @@ async function handleGetPricebook(fergusClient: FergusClient, args: Record<strin
 
 async function handleListPricebookItems(fergusClient: FergusClient, args: Record<string, any>) {
   const { pricebookId, pageSize = 50, pageCursor } = args;
+  checkPageSize(pageSize);
   if (!pricebookId) throw new Error('pricebookId is required for list-items action');
 
   const params = new URLSearchParams();
@@ -148,16 +188,23 @@ async function handleListPricebookItems(fergusClient: FergusClient, args: Record
 }
 
 async function handleGetPricebookItem(fergusClient: FergusClient, args: Record<string, any>) {
-  const { pricebookId, itemId } = args;
+  const { pricebookId, itemId, filterPricingTierId } = args;
   if (!pricebookId || !itemId) throw new Error('pricebookId and itemId are required for get-item action');
 
-  const item = await fergusClient.get(`/pricebooks/${pricebookId}/pricebookItems/${itemId}`);
+  const query = filterPricingTierId !== undefined && filterPricingTierId !== null
+    ? `?${new URLSearchParams({ filterPricingTierId: String(filterPricingTierId) }).toString()}`
+    : '';
+  const item = await fergusClient.get(`/pricebooks/${pricebookId}/pricebookItems/${itemId}${query}`);
   return { content: [{ type: 'text' as const, text: JSON.stringify(item, null, 2) }] };
 }
 
 async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<string, any>) {
   const { searchText, pricingTierId, allSuppliers, supplierIds, supplierNames, pageSize = 50, pageCursor } = args;
+  checkPageSize(pageSize);
   if (!searchText) throw new Error('searchText is required for search action');
+  if (String(searchText).length < 3) {
+    throw new Error('searchText must be at least 3 characters. Nothing was searched.');
+  }
 
   const requestBody: any = { search: searchText };
   if (pricingTierId !== undefined) requestBody.pricingTierId = pricingTierId;
@@ -165,7 +212,10 @@ async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<s
   const hasSupplierFilter = supplierNames?.length > 0 || supplierIds?.length > 0;
 
   if (hasSupplierFilter) {
-    const knownPricebooks = await getCachedPricebooks(fergusClient);
+    const { pricebooks: knownPricebooks, complete } = await getCachedPricebooks(fergusClient);
+    const incompleteNote = complete
+      ? ''
+      : `\nOnly the first ${knownPricebooks.length} price books could be read, so this supplier may still exist; pass its supplierIds instead.`;
     const knownMerchantIdSet = new Set(knownPricebooks.map(pb => pb.supplierId));
     const resolvedIds: number[] = [];
 
@@ -183,13 +233,18 @@ async function handleSearchPricebooks(fergusClient: FergusClient, args: Record<s
         const validNames = knownPricebooks.map(pb => pb.supplierName).sort().join(', ');
         throw new Error(
           `Unknown supplier names: [${unknownNames.map(n => `"${n}"`).join(', ')}].\n` +
-          `Valid supplier names: ${validNames}`
+          `Valid supplier names: ${validNames}` + incompleteNote
         );
       }
     }
 
     if (supplierIds?.length > 0) {
-      const invalidIds = (supplierIds as number[]).filter(id => !knownMerchantIdSet.has(id));
+      // 0 is the custom price book, which the price book list never includes.
+      // When not every price book could be read, an unknown ID may still be a
+      // real supplier, so pass it through rather than reject it.
+      const invalidIds = complete
+        ? (supplierIds as number[]).filter(id => id !== CUSTOM_PRICE_BOOK_SUPPLIER_ID && !knownMerchantIdSet.has(id))
+        : [];
       if (invalidIds.length > 0) {
         const knownPricebookIdSet = new Set(knownPricebooks.map(pb => pb.id));
         const lines = [

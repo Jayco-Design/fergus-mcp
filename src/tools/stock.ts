@@ -5,10 +5,14 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
+
+/** sortField values the Partner API accepts for stock on hand. */
+const STOCK_ON_HAND_SORT_FIELDS = ['dateEntered', 'lastModified'] as const;
 
 export const manageStockToolDefinition = {
   name: 'manage-stock',
-  description: 'Manage stock. Actions: list-used (stock used records), list-on-hand (all stock on hand), list-on-hand-by-phase (stock on hand for a specific phase), create-on-hand, update-on-hand, delete-on-hand. Stock on hand can be created from a pricebook item or with manual details.',
+  description: 'Manage stock. Actions: list-used (stock used on jobs), list-on-hand (all stock on hand), list-on-hand-by-phase (stock on hand for a specific phase), create-on-hand, update-on-hand, delete-on-hand. Stock on hand can be created from a pricebook item or with manual details. list-used returns stock used from filterDateFrom (default 90 days ago) in pages of up to 5000 rows, so use a recent start date where possible; it has no search or page size.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -28,11 +32,23 @@ export const manageStockToolDefinition = {
       // list params
       filterSearchText: {
         type: 'string',
-        description: 'Search text (for: list-used, list-on-hand, list-on-hand-by-phase)',
+        description: 'Search text, matched on the item description (for: list-on-hand, list-on-hand-by-phase)',
+      },
+      filterDateFrom: {
+        type: 'string',
+        description: 'Only stock used on or after this date, yyyy-mm-dd, at most 180 days ago. Default: 90 days ago. (for: list-used)',
+      },
+      dateEntered: {
+        type: 'string',
+        description: 'ISO 8601 date-time. With sortField dateEntered (the default), start the list at this time: items entered at or after it when sortOrder is asc, at or before it when desc. Applies to the first page only. (for: list-on-hand, list-on-hand-by-phase)',
+      },
+      lastModified: {
+        type: 'string',
+        description: 'ISO 8601 date-time. With sortField lastModified, start the list at this time: items modified at or after it when sortOrder is asc, at or before it when desc. Applies to the first page only. (for: list-on-hand, list-on-hand-by-phase)',
       },
       sortField: {
         type: 'string',
-        enum: ['dateEntered', 'lastModified'],
+        enum: [...STOCK_ON_HAND_SORT_FIELDS],
         description: 'Field to sort by (for: list-on-hand, list-on-hand-by-phase, default: dateEntered)',
         default: 'dateEntered',
       },
@@ -44,12 +60,14 @@ export const manageStockToolDefinition = {
       },
       pageSize: {
         type: 'number',
-        description: 'Max results per page (default: 50)',
+        minimum: 1,
+        maximum: 100,
+        description: 'Max results per page, 1-100 (for: list-on-hand, list-on-hand-by-phase, default: 50)',
         default: 50,
       },
       pageCursor: {
         type: 'string',
-        description: 'Pagination cursor',
+        description: 'Pagination cursor (for: list-used, list-on-hand, list-on-hand-by-phase)',
       },
       // create params - pricebook item
       priceBookLineItemId: {
@@ -111,11 +129,14 @@ export async function handleManageStock(
 // ===== LIST STOCK USED =====
 
 async function handleListStockUsed(fergusClient: FergusClient, args: Record<string, any>) {
-  const { filterSearchText, pageSize = 50, pageCursor } = args;
+  // The API takes only a start date and a cursor here: no search or page size.
+  const { filterDateFrom, pageCursor } = args;
+  if (filterDateFrom !== undefined && filterDateFrom !== null && filterDateFrom !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(String(filterDateFrom))) {
+    throw new Error('filterDateFrom must be a date in yyyy-mm-dd format, such as 2026-10-01. Nothing was listed.');
+  }
 
   const params = new URLSearchParams();
-  params.append('pageSize', pageSize.toString());
-  if (filterSearchText) params.append('filterSearchText', filterSearchText);
+  if (filterDateFrom) params.append('filterDateFrom', filterDateFrom);
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   const stock = await fergusClient.get(`/stockUsed?${params.toString()}`);
@@ -125,13 +146,26 @@ async function handleListStockUsed(fergusClient: FergusClient, args: Record<stri
 // ===== STOCK ON HAND =====
 
 function buildStockOnHandParams(args: Record<string, any>): URLSearchParams {
-  const { filterSearchText, sortField, sortOrder, pageSize = 50, pageCursor } = args;
+  const { filterSearchText, sortField, sortOrder, pageSize = 50, pageCursor, dateEntered, lastModified } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, STOCK_ON_HAND_SORT_FIELDS);
+  // The API applies each date only when it matches the sort field, and
+  // ignores it otherwise; say so rather than silently dropping it.
+  const activeSort = sortField || 'dateEntered';
+  if (dateEntered && activeSort !== 'dateEntered') {
+    throw new Error('dateEntered only applies when sortField is dateEntered. Nothing was listed.');
+  }
+  if (lastModified && activeSort !== 'lastModified') {
+    throw new Error('lastModified only applies when sortField is lastModified. Nothing was listed.');
+  }
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
   if (filterSearchText) params.append('filterSearchText', filterSearchText);
   if (sortField) params.append('sortField', sortField);
   if (sortOrder) params.append('sortOrder', sortOrder);
+  if (dateEntered) params.append('dateEntered', dateEntered);
+  if (lastModified) params.append('lastModified', lastModified);
   if (pageCursor) params.append('pageCursor', pageCursor);
 
   return params;
@@ -202,5 +236,7 @@ async function handleDeleteStockOnHand(fergusClient: FergusClient, args: Record<
   }
 
   const result = await fergusClient.delete(`/phases/${jobPhaseId}/stockOnHand/${stockOnHandId}`);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(result ?? { success: true }, null, 2) }] };
+  // A successful delete has no content, which the client returns as {}.
+  const empty = result == null || (typeof result === 'object' && Object.keys(result as object).length === 0);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(empty ? { success: true } : result, null, 2) }] };
 }

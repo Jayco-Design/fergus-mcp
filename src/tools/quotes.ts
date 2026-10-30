@@ -6,6 +6,7 @@
 import { FergusClient } from '../fergus-client.js';
 import { resolveJobId } from './job-resolver.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkOneOf, checkPageSize } from '../utils/list-params.js';
 
 const quoteStatusOptions = ['draft', 'accepted', 'voided', 'superseded', 'declined', 'published', 'emailSent', 'emailNotSent'] as const;
 const quoteListSortOptions = ['id', 'versionNumber'] as const;
@@ -16,7 +17,7 @@ const quoteSectionSchema = {
   properties: {
     name: {
       type: 'string',
-      description: 'Section name.',
+      description: 'Section name. Required.',
     },
     description: {
       type: 'string',
@@ -72,6 +73,7 @@ const quoteSectionSchema = {
       },
     },
   },
+  required: ['name'],
 };
 
 const sectionsSchema = {
@@ -111,20 +113,23 @@ export const manageQuotesToolDefinition = {
       },
       createdAfter: {
         type: 'string',
-        description: 'Filter quotes created after this ISO 8601 timestamp. (for: list-all)',
+        description: 'Only quotes created after this ISO 8601 timestamp. Can\'t be combined with modifiedAfter, and overrides sortField and sortOrder. (for: list-all)',
       },
       modifiedAfter: {
         type: 'string',
-        description: 'Filter quotes modified after this ISO 8601 timestamp. (for: list-all)',
+        description: 'Only quotes modified after this ISO 8601 timestamp. Can\'t be combined with createdAfter, and overrides sortField and sortOrder. (for: list-all)',
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Maximum quotes to return. Default: 50. (for: list, list-all)',
         default: 50,
       },
       sortField: {
         type: 'string',
-        description: 'Sort field. For list: id, versionNumber. For list-all: id, createdAt, lastModified. (for: list, list-all)',
+        enum: [...new Set([...quoteListSortOptions, ...quoteListAllSortOptions])],
+        description: 'Sort field. For list: id or versionNumber. For list-all: id, createdAt or lastModified. Ignored by list-all when createdAfter or modifiedAfter is given. (for: list, list-all)',
       },
       sortOrder: {
         type: 'string',
@@ -309,6 +314,8 @@ async function handleListQuotes(
   args: Record<string, any>
 ) {
   const { jobId: jobRef, filterStatus, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, quoteListSortOptions);
   if (!jobRef) {
     throw new Error('jobId is required for list action. Use list-all to search quotes across all jobs.');
   }
@@ -336,6 +343,11 @@ async function handleListAllQuotes(
   args: Record<string, any>
 ) {
   const { filterStatus, createdAfter, modifiedAfter, pageSize = 50, sortField, sortOrder, pageCursor } = args;
+  checkPageSize(pageSize);
+  checkOneOf('sortField', sortField, quoteListAllSortOptions);
+  if (createdAfter && modifiedAfter) {
+    throw new Error('createdAfter and modifiedAfter can\'t be combined; send one of them. Nothing was listed.');
+  }
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
@@ -419,7 +431,7 @@ async function handleUpdateQuote(
       content: [{ type: 'text' as const, text: JSON.stringify(quote, null, 2) }],
     };
   } catch (error: any) {
-    if (error.message?.includes('must be a draft')) {
+    if (isNotDraftError(error)) {
       throw new Error(
         `Cannot update quote ${quoteId}: The quote must be in DRAFT status. ` +
         `Use create action to create a new quote version instead.`
@@ -427,6 +439,13 @@ async function handleUpdateQuote(
     }
     throw error;
   }
+}
+
+/** The API's 400 for a quote that isn't a draft; its message is in the response body. */
+function isNotDraftError(error: any): boolean {
+  return [error?.response?.message, error?.message].some(
+    (m) => typeof m === 'string' && m.includes('must be a draft')
+  );
 }
 
 // ===== UPDATE QUOTE VERSION =====
@@ -478,7 +497,7 @@ async function handleUpdateQuoteVersion(
       content: [{ type: 'text' as const, text: JSON.stringify(quote, null, 2) }],
     };
   } catch (error: any) {
-    if (error.message?.includes('must be a draft')) {
+    if (isNotDraftError(error)) {
       throw new Error(
         `Cannot update quote version ${versionNumber}: The quote must be in DRAFT status. ` +
         `Use create action to create a new quote version instead.`

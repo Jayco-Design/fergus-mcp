@@ -5,6 +5,7 @@
 
 import { FergusClient } from '../fergus-client.js';
 import { normalizeListResponse } from '../utils/format-response.js';
+import { checkPageSize } from '../utils/list-params.js';
 
 export const manageEnquiriesToolDefinition = {
   name: 'manage-enquiries',
@@ -145,6 +146,7 @@ async function handleListEnquiries(fergusClient: FergusClient, args: Record<stri
     sortOrder,
     pageCursor,
   } = args;
+  checkPageSize(pageSize);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());

@@ -7,6 +7,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { assertContactItemInputs, hasContactItemChanges, userContactItemChanges } from '../utils/contact-items.js';
 import { FergusClient } from '../fergus-client.js';
 import { formatResponse, isChatGPT, extractPagination } from '../utils/format-response.js';
+import { checkPageSize } from '../utils/list-params.js';
 
 export const manageUsersToolDefinition = {
   name: 'manage-users',
@@ -30,6 +31,8 @@ export const manageUsersToolDefinition = {
       },
       pageSize: {
         type: 'number',
+        minimum: 1,
+        maximum: 100,
         description: 'Max results per page (for: list, default: 10)',
         default: 10,
       },
@@ -192,6 +195,7 @@ async function handleListUsers(
     filterStatus,
     pageCursor = '0',
   } = args;
+  checkPageSize(pageSize);
 
   const params = new URLSearchParams();
   params.append('pageSize', pageSize.toString());
