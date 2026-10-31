@@ -23,6 +23,15 @@ export interface HttpConfig extends Config {
   allowedOrigins?: string[];
   allowedHosts?: string[];
   enableDnsRebindingProtection?: boolean;
+  /** Express "trust proxy" setting; set when running behind a reverse proxy or load balancer. */
+  trustProxy?: boolean | number;
+}
+
+export interface RateLimitConfig {
+  /** Maximum requests per client per window. */
+  max: number;
+  /** Window length in milliseconds. */
+  windowMs: number;
 }
 
 export interface OAuthConfig {
@@ -52,6 +61,7 @@ export interface SessionConfig {
 export interface HttpOAuthConfig extends HttpConfig {
   oauth: OAuthConfig;
   session: SessionConfig;
+  rateLimit: RateLimitConfig;
 }
 
 /**
@@ -184,6 +194,39 @@ export function loadSessionConfig(): SessionConfig {
 }
 
 /**
+ * Loads rate limit configuration from environment variables
+ */
+export function loadRateLimitConfig(): RateLimitConfig {
+  const max = parseInt(process.env.RATE_LIMIT_MAX || '100', 10);
+  const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
+
+  if (!Number.isFinite(max) || max <= 0) {
+    throw new Error(`RATE_LIMIT_MAX must be a positive number, got: ${process.env.RATE_LIMIT_MAX}`);
+  }
+
+  if (!Number.isFinite(windowMs) || windowMs <= 0) {
+    throw new Error(`RATE_LIMIT_WINDOW_MS must be a positive number of milliseconds, got: ${process.env.RATE_LIMIT_WINDOW_MS}`);
+  }
+
+  return { max, windowMs };
+}
+
+/**
+ * Parses the TRUST_PROXY environment variable into an Express "trust proxy" value
+ */
+function loadTrustProxy(): boolean | number | undefined {
+  const raw = process.env.TRUST_PROXY;
+  if (raw === undefined || raw === '') return undefined;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  const hops = parseInt(raw, 10);
+  if (!Number.isFinite(hops) || hops < 0) {
+    throw new Error(`TRUST_PROXY must be true, false or a number of proxy hops, got: ${raw}`);
+  }
+  return hops;
+}
+
+/**
  * Loads HTTP server configuration with OAuth support
  */
 export function loadHttpOAuthConfig(): HttpOAuthConfig {
@@ -191,6 +234,7 @@ export function loadHttpOAuthConfig(): HttpOAuthConfig {
   const baseConfig = loadConfig(false);
   const oauth = loadOAuthConfig();
   const session = loadSessionConfig();
+  const rateLimit = loadRateLimitConfig();
 
   return {
     ...baseConfig,
@@ -200,7 +244,9 @@ export function loadHttpOAuthConfig(): HttpOAuthConfig {
     allowedOrigins: process.env.ALLOWED_ORIGINS?.split(','),
     allowedHosts: process.env.ALLOWED_HOSTS?.split(','),
     enableDnsRebindingProtection: process.env.ENABLE_DNS_REBINDING_PROTECTION !== 'false',
+    trustProxy: loadTrustProxy(),
     oauth,
     session,
+    rateLimit,
   };
 }

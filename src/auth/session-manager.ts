@@ -59,7 +59,7 @@ export class SessionManager {
       this.oauthSessionToMcpSession.set(oauthSessionId, sessionId);
     }
 
-    console.error(`[SessionManager] Created session ${sessionId} at ${now.toISOString()}`);
+    console.error(`[SessionManager] Created session at ${now.toISOString()}`);
   }
 
   /**
@@ -74,7 +74,7 @@ export class SessionManager {
       // Update last accessed time
       session.lastAccessedAt = new Date();
     }
-    console.error(`[SessionManager] Fetched session ${sessionId} at ${session?.lastAccessedAt.toISOString()}`);
+    console.error(`[SessionManager] Fetched session at ${session?.lastAccessedAt.toISOString()}`);
 
     return session || null;
   }
@@ -106,7 +106,7 @@ export class SessionManager {
     this.oauthSessionToMcpSession.delete(oldOAuthSessionId);
     this.oauthSessionToMcpSession.set(newOAuthSessionId, mcpSessionId);
     console.error(
-      `[SessionManager] Rebound MCP session ${mcpSessionId} from OAuth session ${oldOAuthSessionId} to ${newOAuthSessionId}`
+      '[SessionManager] Rebound MCP session after OAuth token rotation'
     );
     return true;
   }
@@ -126,7 +126,7 @@ export class SessionManager {
     }
     session.lastAccessedAt = new Date();
     console.error(
-      `[SessionManager] Fetched session ${sessionId} via OAuth session ${oauthSessionId}`
+      '[SessionManager] Fetched session via OAuth session'
     );
     return session;
   }
@@ -165,14 +165,14 @@ export class SessionManager {
         // Note: StreamableHTTPServerTransport doesn't have an explicit close method
         // The transport will be garbage collected when the session is deleted
       } catch (error) {
-        console.error(`[SessionManager] Error closing transport for session ${sessionId}:`, error);
+        console.error('[SessionManager] Error closing transport for session');
       }
 
       this.sessions.delete(sessionId);
       if (session.oauthSessionId) {
         this.oauthSessionToMcpSession.delete(session.oauthSessionId);
       }
-      console.error(`[SessionManager] Deleted session ${sessionId}`);
+      console.error('[SessionManager] Deleted session');
     }
   }
 
@@ -208,7 +208,7 @@ export class SessionManager {
 
       if (inactiveMs > timeoutMs) {
         console.error(
-          `[SessionManager] Session ${sessionId} inactive for ${Math.round(inactiveMs / 1000)}s, cleaning up`
+          `[SessionManager] Session inactive for ${Math.round(inactiveMs / 1000)}s, cleaning up`
         );
         this.deleteSession(sessionId);
         cleaned++;

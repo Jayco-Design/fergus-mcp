@@ -16,6 +16,7 @@ import { RedisTokenManager } from '../auth/redis-token-manager.js';
 import { FileTokenManager } from '../auth/file-token-manager.js';
 import { generateAuthUrl, exchangeCodeForTokens, generateState, generatePKCE } from '../auth/oauth-handler.js';
 import { HttpOAuthConfig } from '../config.js';
+import { createRateLimiter } from './rate-limit.js';
 
 /**
  * Temporary storage for OAuth state parameters (CSRF protection)
@@ -76,10 +77,14 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
     console.error(`[HTTP OAuth Server] Token storage: redis (TTL: ${ttlDays} days from TOKEN_TTL_MS)`);
   } else if (config.session.storage === 'file' || process.env.NODE_ENV === 'development') {
     tokenManager = new FileTokenManager(config.oauth);
-    console.error(`[HTTP OAuth Server] Token storage: file (persistent across restarts)`);
+    console.error('[HTTP OAuth Server] Token storage: file (persistent across restarts)');
   } else {
     tokenManager = new TokenManager(config.oauth);
-    console.error(`[HTTP OAuth Server] Token storage: memory (ephemeral)`);
+    console.error('[HTTP OAuth Server] Token storage: memory (ephemeral)');
+  }
+
+  if (config.trustProxy !== undefined) {
+    app.set('trust proxy', config.trustProxy);
   }
 
   // Configure CORS
@@ -90,6 +95,12 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
     credentials: true,
   }));
 
+  // Rate limit per client (bearer token, or IP when unauthenticated)
+  app.use(createRateLimiter(
+    config.rateLimit,
+    config.session.storage === 'redis' ? config.session.redisUrl : undefined,
+  ));
+
   // Parse JSON bodies
   app.use(express.json());
 
@@ -98,7 +109,9 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
   // Request logging middleware (production: use structured logger like Pino)
   app.use((req, res, next) => {
-    console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    if (req.path !== '/health') {
+      console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    }
     next();
   });
 
@@ -229,10 +242,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Redirect user to Cognito for authentication
       const authUrl = generateAuthUrl(config.oauth, ourState, challenge);
 
-      console.error(`[OAuth] Redirecting to Cognito: ${authUrl}`);
+      console.error('[OAuth] Redirecting to Cognito');
       res.redirect(authUrl);
     } catch (error) {
-      console.error('[OAuth] Error initiating authorization:', error);
+      console.error('[OAuth] Error initiating authorization');
       res.status(500).send('Failed to initiate OAuth flow');
     }
   });
@@ -247,7 +260,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
       // Check for OAuth errors
       if (error) {
-        console.error(`[OAuth] Authorization error: ${error} - ${error_description}`);
+        console.error('[OAuth] Authorization failed');
         res.status(400).send(`OAuth error: ${error}${error_description ? ` - ${error_description}` : ''}`);
         return;
       }
@@ -261,7 +274,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Verify state parameter (CSRF protection)
       const stateData = oauthStates.get(state);
       if (!stateData) {
-        console.error(`[OAuth] Invalid or expired state parameter: ${state}`);
+        console.error('[OAuth] Invalid or expired state parameter');
         res.status(400).send('Invalid or expired state parameter');
         return;
       }
@@ -269,7 +282,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Remove used state
       oauthStates.delete(state);
 
-      console.error(`[OAuth] 🔐 Exchanging Cognito authorization code for tokens`);
+      console.error('[OAuth] 🔐 Exchanging Cognito authorization code for tokens');
 
       // Exchange code for tokens from Cognito
       const tokens = await exchangeCodeForTokens(config.oauth, code, stateData.codeVerifier);
@@ -288,10 +301,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       claudeCallbackUrl.searchParams.set('code', sessionId); // Our session ID is the authorization code for Claude
       claudeCallbackUrl.searchParams.set('state', stateData.clientState || state); // Pass through the client's original state
 
-      console.error(`[OAuth] Redirecting to client callback: ${claudeCallbackUrl.toString()}`);
+      console.error('[OAuth] Redirecting to client callback');
       res.redirect(claudeCallbackUrl.toString());
     } catch (error) {
-      console.error('[OAuth] Error in callback:', error);
+      console.error('[OAuth] Error in callback');
       res.status(500).send('Failed to complete OAuth flow');
     }
   });
@@ -408,7 +421,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       console.error(`[OAuth] Unsupported grant_type: ${grant_type}`);
       res.status(400).json({ error: 'unsupported_grant_type' });
     } catch (error) {
-      console.error('[OAuth] Error in token endpoint:', error);
+      console.error('[OAuth] Error in token endpoint');
       res.status(500).json({ error: 'server_error' });
     }
   });
@@ -442,10 +455,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       transport = session.transport;
       sessionManager.updateLastAccessed(sessionId);
     } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request
-      // ChatGPT needs unauthenticated access to discover tools
-      // Check for Bearer token in Authorization header (optional for discovery)
-      if (!oauthSessionId) {
+      // New initialization request. A bearer token that we hold tokens for is required;
+      // anything else gets a 401 so the client knows to (re)authenticate.
+      const hasStoredTokens = oauthSessionId ? await tokenManager.hasTokens(oauthSessionId) : false;
+      if (!oauthSessionId || !hasStoredTokens) {
         res.status(401).json({
           jsonrpc: '2.0',
           error: {
@@ -463,43 +476,34 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // this indirection the closure would forever reference the deleted old ID.
       const mcpSessionId = randomUUID();
 
-      // Create FergusClient - use OAuth if available, otherwise null (for discovery only)
-      const fergusClient = (oauthSessionId && tokenManager.hasTokens(oauthSessionId))
-        ? new FergusClient({
-            tokenProvider: async () => {
-              // After init, sessionManager owns the current OAuth session ID and is
-              // updated on rotation. Before init completes (e.g. during checkUserPermitted),
-              // fall back to the original ID captured here.
-              const liveOAuthSessionId =
-                sessionManager.getOAuthSessionId(mcpSessionId) ?? oauthSessionId;
-              return await tokenManager.getAccessToken(liveOAuthSessionId);
-            },
-            baseUrl: config.fergusBaseUrl,
-          })
-        : new FergusClient({
-            // Unauthenticated mode - will fail on actual tool calls
-            tokenProvider: async () => null,
-            baseUrl: config.fergusBaseUrl,
-          });
+      const fergusClient = new FergusClient({
+        tokenProvider: async () => {
+          // After init, sessionManager owns the current OAuth session ID and is
+          // updated on rotation. Before init completes (e.g. during checkUserPermitted),
+          // fall back to the original ID captured here.
+          const liveOAuthSessionId =
+            sessionManager.getOAuthSessionId(mcpSessionId) ?? oauthSessionId;
+          return await tokenManager.getAccessToken(liveOAuthSessionId);
+        },
+        baseUrl: config.fergusBaseUrl,
+      });
 
       // Verify the authenticated user is permitted to use this integration
-      if (oauthSessionId && tokenManager.hasTokens(oauthSessionId)) {
-        const permitted = await checkUserPermitted(fergusClient);
-        if (!permitted) {
-          console.error('[MCP] Session init rejected: user does not meet access requirements');
-          res.status(403).json({
-            jsonrpc: '2.0',
-            error: {
-              code: -32000,
-              message: 'Your account does not have access to this integration. Please contact your account administrator.',
-            },
-            id: null,
-          });
-          return;
-        }
+      const permitted = await checkUserPermitted(fergusClient);
+      if (!permitted) {
+        console.error('[MCP] Session init rejected: user does not meet access requirements');
+        res.status(403).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Your account does not have access to this integration. Please contact your account administrator.',
+          },
+          id: null,
+        });
+        return;
       }
 
-      console.error(`[MCP] Initializing new session${oauthSessionId ? ` using OAuth session ${oauthSessionId}` : ' (unauthenticated discovery mode)'}`);
+      console.error('[MCP] Initializing new authenticated session');
 
       try {
         // Create transport (mcpSessionId was generated above so the tokenProvider closure
@@ -508,7 +512,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
           sessionIdGenerator: () => mcpSessionId,
           onsessioninitialized: (newSessionId) => {
             sessionManager.createSession(newSessionId, newTransport, fergusClient, oauthSessionId);
-            console.error(`[MCP] Session initialized successfully: ${newSessionId}`);
+            console.error('[MCP] Session initialized successfully');
           },
           // Disable DNS rebinding protection for remote OAuth connections
           // Claude Desktop doesn't always send Origin headers
@@ -522,7 +526,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         // Note: We don't delete OAuth tokens here as they should persist across MCP sessions
         newTransport.onclose = () => {
           if (newTransport.sessionId) {
-            console.error(`[MCP] Closing transport for session ${newTransport.sessionId}`);
+            console.error('[MCP] Closing transport for session');
             sessionManager.deleteSession(newTransport.sessionId);
           }
         };
@@ -531,7 +535,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         const server = createMcpServer(fergusClient);
         await server.connect(newTransport);
       } catch (error) {
-        console.error(`[MCP] Error during initialization:`, error);
+        console.error('[MCP] Error during initialization');
         throw error;
       }      
     } else {

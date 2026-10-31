@@ -40,7 +40,7 @@ export class TokenManager implements ITokenManager {
       createdAt: now,
     });
 
-    console.error(`[TokenManager] Stored tokens for session ${sessionId}, expires at ${expiresAt.toISOString()}`);
+    console.error(`[TokenManager] Stored tokens for session, expires at ${expiresAt.toISOString()}`);
   }
 
   /**
@@ -52,7 +52,6 @@ export class TokenManager implements ITokenManager {
     const stored = this.storage.get(sessionId);
 
     if (!stored) {
-      console.error(`[TokenManager] No tokens found for session ${sessionId}`);
       return null;
     }
 
@@ -61,7 +60,7 @@ export class TokenManager implements ITokenManager {
     const timeUntilExpiry = stored.expiresAt.getTime() - now.getTime();
 
     if (timeUntilExpiry < this.refreshThresholdMs) {
-      console.error(`[TokenManager] Token for session ${sessionId} is expiring soon, attempting refresh`);
+      console.error('[TokenManager] Token for session is expiring soon, attempting refresh');
 
       // Try to refresh the token
       try {
@@ -69,7 +68,7 @@ export class TokenManager implements ITokenManager {
         const refreshedStored = this.storage.get(sessionId);
         return refreshedStored?.tokens.accessToken || null;
       } catch (error) {
-        console.error(`[TokenManager] Token refresh failed for session ${sessionId}:`, error);
+        console.error('[TokenManager] Token refresh failed for session');
         // Token refresh failed, return null to force re-authentication
         this.deleteTokens(sessionId);
         return null;
@@ -97,7 +96,7 @@ export class TokenManager implements ITokenManager {
     const stored = this.storage.get(sessionId);
 
     if (!stored) {
-      throw new Error(`No tokens found for session ${sessionId}`);
+      throw new Error('No tokens found for session');
     }
 
     const now = new Date();
@@ -105,22 +104,22 @@ export class TokenManager implements ITokenManager {
 
     // Only refresh if about to expire
     if (timeUntilExpiry >= this.refreshThresholdMs) {
-      console.error(`[TokenManager] Token for session ${sessionId} is still valid, no refresh needed`);
+      console.error('[TokenManager] Token for session is still valid, no refresh needed');
       return;
     }
 
     if (!stored.tokens.refreshToken) {
-      throw new Error(`No refresh token available for session ${sessionId}`);
+      throw new Error('No refresh token available for session');
     }
 
-    console.error(`[TokenManager] Refreshing token for session ${sessionId}`);
+    console.error('[TokenManager] Refreshing token for session');
 
     try {
       const newTokens = await refreshAccessToken(this.config, stored.tokens.refreshToken);
       this.storeTokens(sessionId, newTokens);
-      console.error(`[TokenManager] Successfully refreshed tokens for session ${sessionId}`);
+      console.error('[TokenManager] Successfully refreshed tokens for session');
     } catch (error) {
-      console.error(`[TokenManager] Failed to refresh token for session ${sessionId}:`, error);
+      console.error('[TokenManager] Failed to refresh token for session');
       throw error;
     }
   }
@@ -164,7 +163,7 @@ export class TokenManager implements ITokenManager {
    */
   deleteTokens(sessionId: string): void {
     this.storage.delete(sessionId);
-    console.error(`[TokenManager] Deleted tokens for session ${sessionId}`);
+    console.error('[TokenManager] Deleted tokens for session');
   }
 
   /**

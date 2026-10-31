@@ -34,7 +34,7 @@ export class RedisTokenManager implements ITokenManager {
     });
 
     this.redis.on('error', (error: Error) => {
-      console.error('[RedisTokenManager] Redis connection error:', error);
+      console.error('[RedisTokenManager] Redis connection error');
     });
 
     this.redis.on('connect', () => {
@@ -67,7 +67,7 @@ export class RedisTokenManager implements ITokenManager {
     await this.redis.setex(key, ttl, JSON.stringify(stored));
 
     const ttlDays = Math.floor(ttl / 86400);
-    console.error(`[RedisTokenManager] Stored tokens for session ${sessionId}, Redis TTL: ${ttl}s (${ttlDays} days), Cognito access token expires at ${expiresAt.toISOString()}`);
+    console.error(`[RedisTokenManager] Stored tokens for session, Redis TTL: ${ttl}s (${ttlDays} days), Cognito access token expires at ${expiresAt.toISOString()}`);
   }
 
   /**
@@ -79,7 +79,6 @@ export class RedisTokenManager implements ITokenManager {
     const stored = await this.getStoredTokens(sessionId);
 
     if (!stored) {
-      console.error(`[RedisTokenManager] No tokens found for session ${sessionId}`);
       return null;
     }
 
@@ -89,7 +88,7 @@ export class RedisTokenManager implements ITokenManager {
     const timeUntilExpiry = expiresAt.getTime() - now.getTime();
 
     if (timeUntilExpiry < this.refreshThresholdMs) {
-      console.error(`[RedisTokenManager] Token for session ${sessionId} is expiring soon, attempting refresh`);
+      console.error('[RedisTokenManager] Token for session is expiring soon, attempting refresh');
 
       // Try to refresh the token
       try {
@@ -97,7 +96,7 @@ export class RedisTokenManager implements ITokenManager {
         const refreshedStored = await this.getStoredTokens(sessionId);
         return refreshedStored?.tokens.accessToken || null;
       } catch (error) {
-        console.error(`[RedisTokenManager] Token refresh failed for session ${sessionId}:`, error);
+        console.error('[RedisTokenManager] Token refresh failed for session');
         // Token refresh failed, return null to force re-authentication
         await this.deleteTokens(sessionId);
         return null;
@@ -125,7 +124,7 @@ export class RedisTokenManager implements ITokenManager {
     const stored = await this.getStoredTokens(sessionId);
 
     if (!stored) {
-      throw new Error(`No tokens found for session ${sessionId}`);
+      throw new Error('No tokens found for session');
     }
 
     const now = new Date();
@@ -134,22 +133,22 @@ export class RedisTokenManager implements ITokenManager {
 
     // Only refresh if about to expire
     if (timeUntilExpiry >= this.refreshThresholdMs) {
-      console.error(`[RedisTokenManager] Token for session ${sessionId} is still valid, no refresh needed`);
+      console.error('[RedisTokenManager] Token for session is still valid, no refresh needed');
       return;
     }
 
     if (!stored.tokens.refreshToken) {
-      throw new Error(`No refresh token available for session ${sessionId}`);
+      throw new Error('No refresh token available for session');
     }
 
-    console.error(`[RedisTokenManager] 🔄 Refreshing Cognito tokens for session ${sessionId}`);
+    console.error('[RedisTokenManager] 🔄 Refreshing Cognito tokens for session');
 
     try {
       const newTokens = await refreshAccessToken(this.config, stored.tokens.refreshToken);
       await this.storeTokens(sessionId, newTokens);
-      console.error(`[RedisTokenManager] ✅ Successfully refreshed and stored Cognito tokens for session ${sessionId}`);
+      console.error('[RedisTokenManager] ✅ Successfully refreshed and stored Cognito tokens for session');
     } catch (error) {
-      console.error(`[RedisTokenManager] ❌ Failed to refresh Cognito token for session ${sessionId}:`, error);
+      console.error('[RedisTokenManager] ❌ Failed to refresh Cognito token for session');
       throw error;
     }
   }
@@ -196,7 +195,7 @@ export class RedisTokenManager implements ITokenManager {
   async deleteTokens(sessionId: string): Promise<void> {
     const key = this.getKey(sessionId);
     await this.redis.del(key);
-    console.error(`[RedisTokenManager] Deleted tokens for session ${sessionId}`);
+    console.error('[RedisTokenManager] Deleted tokens for session');
   }
 
   /**
@@ -254,7 +253,7 @@ export class RedisTokenManager implements ITokenManager {
     try {
       return JSON.parse(data) as StoredTokens;
     } catch (error) {
-      console.error(`[RedisTokenManager] Failed to parse stored tokens for session ${sessionId}:`, error);
+      console.error('[RedisTokenManager] Failed to parse stored tokens for session');
       return null;
     }
   }
@@ -267,7 +266,7 @@ export class RedisTokenManager implements ITokenManager {
       await this.redis.expire(key, Math.floor(this.tokenTtlMs / 1000));
     } catch (error) {
       // A failed TTL extension must not fail the request - the key is still valid.
-      console.error(`[RedisTokenManager] Failed to extend TTL for ${key}:`, error);
+      console.error('[RedisTokenManager] Failed to extend TTL for token key');
     }
   }
 

@@ -34,7 +34,7 @@ export class FileTokenManager implements ITokenManager {
     try {
       await fs.mkdir(this.sessionsPath, { recursive: true });
     } catch (error) {
-      console.error('Failed to create sessions directory:', error);
+      console.error('Failed to create sessions directory');
     }
   }
 
@@ -60,7 +60,7 @@ export class FileTokenManager implements ITokenManager {
 
     const filePath = this.getSessionFilePath(sessionId);
     await fs.writeFile(filePath, JSON.stringify(sessionData, null, 2), 'utf-8');
-    console.log(`[FileTokenManager] Stored tokens for session ${sessionId}`);
+    console.log('[FileTokenManager] Stored tokens for session');
   }
 
   /**
@@ -74,11 +74,11 @@ export class FileTokenManager implements ITokenManager {
 
       // Check if token is expired
       if (Date.now() >= sessionData.expiresAt - 60000) { // 1 minute buffer
-        console.log(`[FileTokenManager] Token expired for session ${sessionId}`);
+        console.log('[FileTokenManager] Token expired for session');
 
         // Try to refresh
         if (sessionData.refreshToken) {
-          console.log(`[FileTokenManager] Attempting to refresh token for session ${sessionId}`);
+          console.log('[FileTokenManager] Attempting to refresh token for session');
           // Note: We can't refresh here without OAuth handler access
           // The caller should handle refresh on 401 errors
           return null;
@@ -90,10 +90,10 @@ export class FileTokenManager implements ITokenManager {
       return sessionData.accessToken;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        console.log(`[FileTokenManager] No session found for ${sessionId}`);
+        console.log('[FileTokenManager] No session found');
         return null;
       }
-      console.error(`[FileTokenManager] Error reading session:`, error);
+      console.error('[FileTokenManager] Error reading session');
       return null;
     }
   }
@@ -119,10 +119,10 @@ export class FileTokenManager implements ITokenManager {
     try {
       const filePath = this.getSessionFilePath(sessionId);
       await fs.unlink(filePath);
-      console.log(`[FileTokenManager] Deleted session ${sessionId}`);
+      console.log('[FileTokenManager] Deleted session');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error(`[FileTokenManager] Error deleting session:`, error);
+        console.error('[FileTokenManager] Error deleting session');
       }
     }
   }
@@ -160,12 +160,12 @@ export class FileTokenManager implements ITokenManager {
 
       // Check if token is expiring soon (within 5 minutes)
       if (Date.now() >= sessionData.expiresAt - 300000) {
-        console.log(`[FileTokenManager] Refreshing token for session ${sessionId}`);
+        console.log('[FileTokenManager] Refreshing token for session');
         const newTokens = await refreshAccessToken(this.oauthConfig, tokens.refreshToken);
         await this.storeTokens(sessionId, newTokens);
       }
     } catch (error) {
-      console.error(`[FileTokenManager] Error refreshing token:`, error);
+      console.error('[FileTokenManager] Error refreshing token');
     }
   }
 
@@ -205,7 +205,7 @@ export class FileTokenManager implements ITokenManager {
   cleanupExpiredTokens(): void {
     // Run async cleanup in background
     this.cleanupOldSessions().catch(error => {
-      console.error('[FileTokenManager] Cleanup error:', error);
+      console.error('[FileTokenManager] Cleanup error');
     });
   }
 
@@ -236,7 +236,7 @@ export class FileTokenManager implements ITokenManager {
       }
       console.log('[FileTokenManager] Cleared all sessions');
     } catch (error) {
-      console.error('[FileTokenManager] Error clearing sessions:', error);
+      console.error('[FileTokenManager] Error clearing sessions');
     }
   }
 
@@ -270,11 +270,11 @@ export class FileTokenManager implements ITokenManager {
 
         if (Date.now() - sessionData.storedAt > maxAgeMs) {
           await fs.unlink(filePath);
-          console.log(`[FileTokenManager] Cleaned up old session: ${file}`);
+          console.log('[FileTokenManager] Cleaned up old session');
         }
       }
     } catch (error) {
-      console.error('[FileTokenManager] Error cleaning up sessions:', error);
+      console.error('[FileTokenManager] Error cleaning up sessions');
     }
   }
 }

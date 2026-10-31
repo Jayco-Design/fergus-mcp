@@ -259,6 +259,7 @@ See `.env.example` for required environment variables.
 - Tokens stored in-memory (optionally Redis for multi-instance deployments)
 - HTTPS required in production
 - CORS and DNS rebinding protection enabled
+- Per-client rate limiting (see `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` in `.env.example`)
 - Session-based token management with automatic refresh
 - No data stored or transmitted to third parties
 
