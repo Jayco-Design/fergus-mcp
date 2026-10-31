@@ -52,7 +52,6 @@ export class TokenManager implements ITokenManager {
     const stored = this.storage.get(sessionId);
 
     if (!stored) {
-      console.error(`[TokenManager] No tokens found for session ${sessionId}`);
       return null;
     }
 

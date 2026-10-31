@@ -79,7 +79,6 @@ export class RedisTokenManager implements ITokenManager {
     const stored = await this.getStoredTokens(sessionId);
 
     if (!stored) {
-      console.error(`[RedisTokenManager] No tokens found for session ${sessionId}`);
       return null;
     }
 

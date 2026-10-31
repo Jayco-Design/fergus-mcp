@@ -16,6 +16,7 @@ import { RedisTokenManager } from '../auth/redis-token-manager.js';
 import { FileTokenManager } from '../auth/file-token-manager.js';
 import { generateAuthUrl, exchangeCodeForTokens, generateState, generatePKCE } from '../auth/oauth-handler.js';
 import { HttpOAuthConfig } from '../config.js';
+import { createRateLimiter } from './rate-limit.js';
 
 /**
  * Temporary storage for OAuth state parameters (CSRF protection)
@@ -82,6 +83,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
     console.error(`[HTTP OAuth Server] Token storage: memory (ephemeral)`);
   }
 
+  if (config.trustProxy !== undefined) {
+    app.set('trust proxy', config.trustProxy);
+  }
+
   // Configure CORS
   app.use(cors({
     origin: config.allowedOrigins || '*',
@@ -89,6 +94,12 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
     allowedHeaders: ['Content-Type', 'mcp-session-id', 'Authorization'],
     credentials: true,
   }));
+
+  // Rate limit per client (bearer token, or IP when unauthenticated)
+  app.use(createRateLimiter(
+    config.rateLimit,
+    config.session.storage === 'redis' ? config.session.redisUrl : undefined,
+  ));
 
   // Parse JSON bodies
   app.use(express.json());
@@ -98,7 +109,9 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
   // Request logging middleware (production: use structured logger like Pino)
   app.use((req, res, next) => {
-    console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    if (req.path !== '/health') {
+      console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    }
     next();
   });
 
@@ -442,10 +455,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       transport = session.transport;
       sessionManager.updateLastAccessed(sessionId);
     } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request
-      // ChatGPT needs unauthenticated access to discover tools
-      // Check for Bearer token in Authorization header (optional for discovery)
-      if (!oauthSessionId) {
+      // New initialization request. A bearer token that we hold tokens for is required;
+      // anything else gets a 401 so the client knows to (re)authenticate.
+      const hasStoredTokens = oauthSessionId ? await tokenManager.hasTokens(oauthSessionId) : false;
+      if (!oauthSessionId || !hasStoredTokens) {
         res.status(401).json({
           jsonrpc: '2.0',
           error: {
@@ -463,43 +476,34 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // this indirection the closure would forever reference the deleted old ID.
       const mcpSessionId = randomUUID();
 
-      // Create FergusClient - use OAuth if available, otherwise null (for discovery only)
-      const fergusClient = (oauthSessionId && tokenManager.hasTokens(oauthSessionId))
-        ? new FergusClient({
-            tokenProvider: async () => {
-              // After init, sessionManager owns the current OAuth session ID and is
-              // updated on rotation. Before init completes (e.g. during checkUserPermitted),
-              // fall back to the original ID captured here.
-              const liveOAuthSessionId =
-                sessionManager.getOAuthSessionId(mcpSessionId) ?? oauthSessionId;
-              return await tokenManager.getAccessToken(liveOAuthSessionId);
-            },
-            baseUrl: config.fergusBaseUrl,
-          })
-        : new FergusClient({
-            // Unauthenticated mode - will fail on actual tool calls
-            tokenProvider: async () => null,
-            baseUrl: config.fergusBaseUrl,
-          });
+      const fergusClient = new FergusClient({
+        tokenProvider: async () => {
+          // After init, sessionManager owns the current OAuth session ID and is
+          // updated on rotation. Before init completes (e.g. during checkUserPermitted),
+          // fall back to the original ID captured here.
+          const liveOAuthSessionId =
+            sessionManager.getOAuthSessionId(mcpSessionId) ?? oauthSessionId;
+          return await tokenManager.getAccessToken(liveOAuthSessionId);
+        },
+        baseUrl: config.fergusBaseUrl,
+      });
 
       // Verify the authenticated user is permitted to use this integration
-      if (oauthSessionId && tokenManager.hasTokens(oauthSessionId)) {
-        const permitted = await checkUserPermitted(fergusClient);
-        if (!permitted) {
-          console.error('[MCP] Session init rejected: user does not meet access requirements');
-          res.status(403).json({
-            jsonrpc: '2.0',
-            error: {
-              code: -32000,
-              message: 'Your account does not have access to this integration. Please contact your account administrator.',
-            },
-            id: null,
-          });
-          return;
-        }
+      const permitted = await checkUserPermitted(fergusClient);
+      if (!permitted) {
+        console.error('[MCP] Session init rejected: user does not meet access requirements');
+        res.status(403).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Your account does not have access to this integration. Please contact your account administrator.',
+          },
+          id: null,
+        });
+        return;
       }
 
-      console.error(`[MCP] Initializing new session${oauthSessionId ? ` using OAuth session ${oauthSessionId}` : ' (unauthenticated discovery mode)'}`);
+      console.error(`[MCP] Initializing new session using OAuth session ${oauthSessionId}`);
 
       try {
         // Create transport (mcpSessionId was generated above so the tokenProvider closure
