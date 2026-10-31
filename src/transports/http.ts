@@ -77,10 +77,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
     console.error(`[HTTP OAuth Server] Token storage: redis (TTL: ${ttlDays} days from TOKEN_TTL_MS)`);
   } else if (config.session.storage === 'file' || process.env.NODE_ENV === 'development') {
     tokenManager = new FileTokenManager(config.oauth);
-    console.error(`[HTTP OAuth Server] Token storage: file (persistent across restarts)`);
+    console.error('[HTTP OAuth Server] Token storage: file (persistent across restarts)');
   } else {
     tokenManager = new TokenManager(config.oauth);
-    console.error(`[HTTP OAuth Server] Token storage: memory (ephemeral)`);
+    console.error('[HTTP OAuth Server] Token storage: memory (ephemeral)');
   }
 
   if (config.trustProxy !== undefined) {
@@ -242,10 +242,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Redirect user to Cognito for authentication
       const authUrl = generateAuthUrl(config.oauth, ourState, challenge);
 
-      console.error(`[OAuth] Redirecting to Cognito: ${authUrl}`);
+      console.error('[OAuth] Redirecting to Cognito');
       res.redirect(authUrl);
     } catch (error) {
-      console.error('[OAuth] Error initiating authorization:', error);
+      console.error('[OAuth] Error initiating authorization');
       res.status(500).send('Failed to initiate OAuth flow');
     }
   });
@@ -260,7 +260,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
 
       // Check for OAuth errors
       if (error) {
-        console.error(`[OAuth] Authorization error: ${error} - ${error_description}`);
+        console.error('[OAuth] Authorization failed');
         res.status(400).send(`OAuth error: ${error}${error_description ? ` - ${error_description}` : ''}`);
         return;
       }
@@ -274,7 +274,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Verify state parameter (CSRF protection)
       const stateData = oauthStates.get(state);
       if (!stateData) {
-        console.error(`[OAuth] Invalid or expired state parameter: ${state}`);
+        console.error('[OAuth] Invalid or expired state parameter');
         res.status(400).send('Invalid or expired state parameter');
         return;
       }
@@ -282,7 +282,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       // Remove used state
       oauthStates.delete(state);
 
-      console.error(`[OAuth] 🔐 Exchanging Cognito authorization code for tokens`);
+      console.error('[OAuth] 🔐 Exchanging Cognito authorization code for tokens');
 
       // Exchange code for tokens from Cognito
       const tokens = await exchangeCodeForTokens(config.oauth, code, stateData.codeVerifier);
@@ -301,10 +301,10 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       claudeCallbackUrl.searchParams.set('code', sessionId); // Our session ID is the authorization code for Claude
       claudeCallbackUrl.searchParams.set('state', stateData.clientState || state); // Pass through the client's original state
 
-      console.error(`[OAuth] Redirecting to client callback: ${claudeCallbackUrl.toString()}`);
+      console.error('[OAuth] Redirecting to client callback');
       res.redirect(claudeCallbackUrl.toString());
     } catch (error) {
-      console.error('[OAuth] Error in callback:', error);
+      console.error('[OAuth] Error in callback');
       res.status(500).send('Failed to complete OAuth flow');
     }
   });
@@ -421,7 +421,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
       console.error(`[OAuth] Unsupported grant_type: ${grant_type}`);
       res.status(400).json({ error: 'unsupported_grant_type' });
     } catch (error) {
-      console.error('[OAuth] Error in token endpoint:', error);
+      console.error('[OAuth] Error in token endpoint');
       res.status(500).json({ error: 'server_error' });
     }
   });
@@ -503,7 +503,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         return;
       }
 
-      console.error(`[MCP] Initializing new session using OAuth session ${oauthSessionId}`);
+      console.error('[MCP] Initializing new authenticated session');
 
       try {
         // Create transport (mcpSessionId was generated above so the tokenProvider closure
@@ -512,7 +512,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
           sessionIdGenerator: () => mcpSessionId,
           onsessioninitialized: (newSessionId) => {
             sessionManager.createSession(newSessionId, newTransport, fergusClient, oauthSessionId);
-            console.error(`[MCP] Session initialized successfully: ${newSessionId}`);
+            console.error('[MCP] Session initialized successfully');
           },
           // Disable DNS rebinding protection for remote OAuth connections
           // Claude Desktop doesn't always send Origin headers
@@ -526,7 +526,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         // Note: We don't delete OAuth tokens here as they should persist across MCP sessions
         newTransport.onclose = () => {
           if (newTransport.sessionId) {
-            console.error(`[MCP] Closing transport for session ${newTransport.sessionId}`);
+            console.error('[MCP] Closing transport for session');
             sessionManager.deleteSession(newTransport.sessionId);
           }
         };
@@ -535,7 +535,7 @@ export async function startHttpOAuthServer(config: HttpOAuthConfig): Promise<voi
         const server = createMcpServer(fergusClient);
         await server.connect(newTransport);
       } catch (error) {
-        console.error(`[MCP] Error during initialization:`, error);
+        console.error('[MCP] Error during initialization');
         throw error;
       }      
     } else {
