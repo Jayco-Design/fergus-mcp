@@ -14,6 +14,8 @@ export interface SessionData {
   createdAt: Date;
   lastAccessedAt: Date;
   oauthSessionId?: string;
+  /** The Fergus user (Cognito sub) the session was opened by. Requests for any other user are refused. */
+  userId?: string;
 }
 
 /**
@@ -21,7 +23,6 @@ export interface SessionData {
  */
 export class SessionManager {
   private sessions = new Map<string, SessionData>();
-  private oauthSessionToMcpSession = new Map<string, string>();
   private config: SessionConfig;
   private cleanupIntervalId?: NodeJS.Timeout;
 
@@ -37,12 +38,15 @@ export class SessionManager {
    * @param sessionId Unique session identifier
    * @param transport MCP transport instance
    * @param fergusClient FergusClient instance for this session
+   * @param oauthSessionId OAuth session ID the session was initialised with
+   * @param userId Fergus user (Cognito sub) the session belongs to
    */
   createSession(
     sessionId: string,
     transport: StreamableHTTPServerTransport,
     fergusClient: FergusClient,
-    oauthSessionId?: string
+    oauthSessionId?: string,
+    userId?: string
   ): void {
     const now = new Date();
 
@@ -53,11 +57,8 @@ export class SessionManager {
       createdAt: now,
       lastAccessedAt: now,
       oauthSessionId,
+      userId,
     });
-
-    if (oauthSessionId) {
-      this.oauthSessionToMcpSession.set(oauthSessionId, sessionId);
-    }
 
     console.error(`[SessionManager] Created session at ${now.toISOString()}`);
   }
@@ -89,46 +90,20 @@ export class SessionManager {
   }
 
   /**
-   * Updates the OAuth session ID bound to an MCP session after a refresh-token rotation.
-   * Returns true if a matching MCP session was found and updated.
+   * Records the OAuth session ID the client authenticated its latest request with.
+   * Clients may open several MCP sessions on one login, and after a refresh each of them
+   * presents the rotated token on its next request, so the binding follows the requests
+   * rather than being fixed at initialisation. Each request still uses its own token (see
+   * the transport); this is the fallback for work outside a request.
+   * Returns false if the MCP session does not exist.
    */
-  replaceOAuthSessionId(oldOAuthSessionId: string, newOAuthSessionId: string): boolean {
-    const mcpSessionId = this.oauthSessionToMcpSession.get(oldOAuthSessionId);
-    if (!mcpSessionId) {
-      return false;
-    }
+  bindOAuthSessionId(mcpSessionId: string, oauthSessionId: string): boolean {
     const session = this.sessions.get(mcpSessionId);
     if (!session) {
-      this.oauthSessionToMcpSession.delete(oldOAuthSessionId);
       return false;
     }
-    session.oauthSessionId = newOAuthSessionId;
-    this.oauthSessionToMcpSession.delete(oldOAuthSessionId);
-    this.oauthSessionToMcpSession.set(newOAuthSessionId, mcpSessionId);
-    console.error(
-      '[SessionManager] Rebound MCP session after OAuth token rotation'
-    );
+    session.oauthSessionId = oauthSessionId;
     return true;
-  }
-
-  /**
-   * Gets session data by OAuth session ID
-   */
-  getSessionByOAuthSessionId(oauthSessionId: string): SessionData | null {
-    const sessionId = this.oauthSessionToMcpSession.get(oauthSessionId);
-    if (!sessionId) {
-      return null;
-    }
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      this.oauthSessionToMcpSession.delete(oauthSessionId);
-      return null;
-    }
-    session.lastAccessedAt = new Date();
-    console.error(
-      '[SessionManager] Fetched session via OAuth session'
-    );
-    return session;
   }
 
   /**
@@ -169,9 +144,6 @@ export class SessionManager {
       }
 
       this.sessions.delete(sessionId);
-      if (session.oauthSessionId) {
-        this.oauthSessionToMcpSession.delete(session.oauthSessionId);
-      }
       console.error('[SessionManager] Deleted session');
     }
   }

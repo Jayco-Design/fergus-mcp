@@ -16,6 +16,8 @@ interface StoredSessionData {
   refreshToken?: string;
   expiresAt: number;
   storedAt: number;
+  /** Set when the session was rotated out; the tokens stop working after this time. */
+  retiredUntil?: number;
 }
 
 export class FileTokenManager implements ITokenManager {
@@ -70,7 +72,12 @@ export class FileTokenManager implements ITokenManager {
     try {
       const filePath = this.getSessionFilePath(sessionId);
       const data = await fs.readFile(filePath, 'utf-8');
-      const sessionData = JSON.parse(data);
+      const sessionData: StoredSessionData = JSON.parse(data);
+
+      if (sessionData.retiredUntil !== undefined && Date.now() >= sessionData.retiredUntil) {
+        await this.deleteTokens(sessionId);
+        return null;
+      }
 
       // Check if token is expired
       if (Date.now() >= sessionData.expiresAt - 60000) { // 1 minute buffer
@@ -135,6 +142,10 @@ export class FileTokenManager implements ITokenManager {
       const filePath = this.getSessionFilePath(sessionId);
       const data = await fs.readFile(filePath, 'utf-8');
       const sessionData: StoredSessionData = JSON.parse(data);
+      if (sessionData.retiredUntil !== undefined && Date.now() >= sessionData.retiredUntil) {
+        await this.deleteTokens(sessionId);
+        return null;
+      }
 
       return {
         accessToken: sessionData.accessToken,
@@ -156,12 +167,14 @@ export class FileTokenManager implements ITokenManager {
       if (!tokens || !tokens.refreshToken || !this.oauthConfig) return;
 
       const sessionData = await this.readSessionData(sessionId);
-      if (!sessionData) return;
+      if (!sessionData || sessionData.retiredUntil !== undefined) return;
 
       // Check if token is expiring soon (within 5 minutes)
       if (Date.now() >= sessionData.expiresAt - 300000) {
         console.log('[FileTokenManager] Refreshing token for session');
         const newTokens = await refreshAccessToken(this.oauthConfig, tokens.refreshToken);
+        // Don't revive a session that was retired while Cognito answered
+        if (await this.isRetired(sessionId)) return;
         await this.storeTokens(sessionId, newTokens);
       }
     } catch (error) {
@@ -173,13 +186,27 @@ export class FileTokenManager implements ITokenManager {
    * Check if session has tokens
    */
   async hasTokens(sessionId: string): Promise<boolean> {
-    try {
-      const filePath = this.getSessionFilePath(sessionId);
-      await fs.access(filePath);
-      return true;
-    } catch {
+    const sessionData = await this.readSessionData(sessionId);
+    if (!sessionData) return false;
+    if (sessionData.retiredUntil !== undefined && Date.now() >= sessionData.retiredUntil) {
+      await this.deleteTokens(sessionId);
       return false;
     }
+    return true;
+  }
+
+  /** Local development only: not atomic across processes. */
+  async retireTokens(sessionId: string, graceMs: number): Promise<boolean> {
+    const sessionData = await this.readSessionData(sessionId);
+    if (!sessionData || sessionData.retiredUntil !== undefined) return false;
+    sessionData.retiredUntil = Date.now() + graceMs;
+    await fs.writeFile(this.getSessionFilePath(sessionId), JSON.stringify(sessionData, null, 2), 'utf-8');
+    return true;
+  }
+
+  async isRetired(sessionId: string): Promise<boolean> {
+    const sessionData = await this.readSessionData(sessionId);
+    return sessionData?.retiredUntil !== undefined;
   }
 
   /**
