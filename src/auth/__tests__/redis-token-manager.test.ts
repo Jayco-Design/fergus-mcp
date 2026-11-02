@@ -71,12 +71,11 @@ describe('RedisTokenManager retirement', () => {
   test('a read that extends the TTL just after a retirement does not keep the retired key alive', async () => {
     await manager.storeTokens('login-1', tokens(3600));
     // Retire the session between the read and the TTL extension that follows it
-    const mget = redis.mget.bind(redis);
-    redis.mget = async (...keys: string[]) => {
-      const values = await mget(...keys);
-      redis.mget = mget;
+    const expire = redis.expire.bind(redis);
+    redis.expire = async (key: string, seconds: number) => {
+      redis.expire = expire;
       await manager.retireTokens('login-1', 60_000);
-      return values;
+      return expire(key, seconds);
     };
 
     assert.equal(await manager.getAccessToken('login-1'), 'cognito-access', 'the read itself still succeeds');

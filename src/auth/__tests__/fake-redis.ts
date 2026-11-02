@@ -1,6 +1,8 @@
 /**
  * Minimal in-memory stand-in for the ioredis client, covering only the commands
- * RedisTokenManager uses. Keys expire on read, like Redis's lazy expiry.
+ * RedisTokenManager uses, plus MGET and MULTI. Keys expire on read, like Redis's lazy expiry.
+ * Like Redis Cluster, it rejects a multi-key command or a MULTI whose keys are in different
+ * hash slots.
  */
 export class FakeRedis {
   private store = new Map<string, { value: string; expiresAt?: number }>();
@@ -23,6 +25,7 @@ export class FakeRedis {
       get: (_target, name: string) => {
         if (name === 'exec') {
           return async () => {
+            assertSameSlot(queued.map(([, args]) => String(args[0])));
             // The fake's commands do all their work synchronously, so starting them in one
             // loop keeps the batch atomic
             const pending = queued.map(([command, args]) => (this as any)[command](...args) as Promise<unknown>);
@@ -39,6 +42,7 @@ export class FakeRedis {
   }
 
   async mget(...keys: string[]): Promise<(string | null)[]> {
+    assertSameSlot(keys);
     return keys.map(key => this.live(key)?.value ?? null);
   }
 
@@ -67,6 +71,7 @@ export class FakeRedis {
   }
 
   async del(...keys: string[]): Promise<number> {
+    assertSameSlot(keys);
     let removed = 0;
     for (const key of keys) if (this.store.delete(key)) removed++;
     return removed;
@@ -107,4 +112,26 @@ export class FakeRedis {
     }
     return entry;
   }
+}
+
+/** Throws Redis Cluster's CROSSSLOT error unless every key hashes to the same slot. */
+function assertSameSlot(keys: string[]): void {
+  if (new Set(keys.map(keySlot)).size > 1) {
+    throw new Error("CROSSSLOT Keys in request don't hash to the same slot");
+  }
+}
+
+/** Redis Cluster key slot: CRC16 (XMODEM) of the key, or of its {hash tag}, mod 16384. */
+function keySlot(key: string): number {
+  const open = key.indexOf('{');
+  if (open !== -1) {
+    const close = key.indexOf('}', open + 1);
+    if (close > open + 1) key = key.slice(open + 1, close);
+  }
+  let crc = 0;
+  for (const byte of Buffer.from(key)) {
+    crc ^= byte << 8;
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc % 16384;
 }
