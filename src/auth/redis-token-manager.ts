@@ -312,7 +312,12 @@ export class RedisTokenManager implements ITokenManager {
    */
   private async getEntry(sessionId: string): Promise<{ stored: StoredTokens; retired: boolean } | null> {
     const key = this.getKey(sessionId);
-    const [data, retiredUntil] = await this.redis.mget(key, this.getRetiredKey(sessionId));
+    // Separate GETs, not MGET: the two keys hash to different cluster slots, and Redis
+    // Cluster rejects a multi-key command across slots with CROSSSLOT
+    const [data, retiredUntil] = await Promise.all([
+      this.redis.get(key),
+      this.redis.get(this.getRetiredKey(sessionId)),
+    ]);
 
     if (!data) {
       return null;
@@ -356,18 +361,17 @@ export class RedisTokenManager implements ITokenManager {
 
   /**
    * Extends the TTL of an existing token key. The session may have been retired since it was
-   * read; the retired marker is read in the same transaction, and if it's there the grace TTL
-   * is put back so the extension doesn't keep a retired key around for the full TTL.
+   * read; the retired marker is read after the extension, and if it's there the grace TTL is
+   * put back so the extension doesn't keep a retired key around for the full TTL. retireTokens()
+   * sets the marker before it cuts the TTL, so any retirement whose TTL cut this extension
+   * undid is seen by the read that follows. (Not a MULTI: the keys are in different cluster
+   * slots.)
    */
   private async touch(sessionId: string): Promise<void> {
     try {
-      const results = await this.redis
-        .multi()
-        .expire(this.getKey(sessionId), Math.floor(this.tokenTtlMs / 1000))
-        .get(this.getRetiredKey(sessionId))
-        .exec();
-      const retiredUntil = results?.[1]?.[1];
-      if (typeof retiredUntil === 'string') {
+      await this.redis.expire(this.getKey(sessionId), Math.floor(this.tokenTtlMs / 1000));
+      const retiredUntil = await this.redis.get(this.getRetiredKey(sessionId));
+      if (retiredUntil !== null) {
         await this.redis.pexpire(this.getKey(sessionId), Math.max(1, Number(retiredUntil) - Date.now()));
       }
     } catch (error) {
