@@ -8,6 +8,9 @@ import { OAuthConfig } from '../config.js';
 import { OAuthTokens, refreshAccessToken } from './oauth-handler.js';
 import { ITokenManager } from './token-manager-interface.js';
 
+/** Extra life for a retired marker beyond any token key it guards, to absorb clock and latency skew. */
+const RETIRED_MARKER_MARGIN_MS = 60 * 1000;
+
 interface StoredTokens {
   tokens: OAuthTokens;
   expiresAt: string; // ISO string for JSON serialization
@@ -16,18 +19,27 @@ interface StoredTokens {
 
 /**
  * Redis-backed token manager class for handling OAuth token storage and refresh
+ *
+ * A session rotated out by a refresh grant is marked with a separate retired key, set with
+ * SET NX so only one refresh grant can claim it. Both the retirement and a Cognito refresh
+ * that finishes afterwards re-check that key and cut the token key's TTL to the grace
+ * period, so a late refresh can't bring a retired session back to life.
  */
 export class RedisTokenManager implements ITokenManager {
   private redis: Redis;
   private config: OAuthConfig;
   private refreshThresholdMs = 5 * 60 * 1000; // Refresh if < 5 minutes remaining
   private keyPrefix = 'fergus-mcp:tokens:';
+  private retiredKeyPrefix = 'fergus-mcp:retired:';
   private tokenTtlMs: number; // TTL for Redis keys (from TOKEN_TTL_MS env var)
 
-  constructor(config: OAuthConfig, redisUrl: string, tokenTtlMs?: number) {
+  /**
+   * @param client Optional pre-built client (used by tests); otherwise one is created from redisUrl
+   */
+  constructor(config: OAuthConfig, redisUrl: string, tokenTtlMs?: number, client?: Redis) {
     this.config = config;
     this.tokenTtlMs = tokenTtlMs || 30 * 24 * 60 * 60 * 1000; // Default: 30 days
-    this.redis = new Redis(redisUrl, {
+    this.redis = client ?? new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       lazyConnect: false,
@@ -76,29 +88,38 @@ export class RedisTokenManager implements ITokenManager {
    * @returns Access token or null if session not found
    */
   async getAccessToken(sessionId: string): Promise<string | null> {
-    const stored = await this.getStoredTokens(sessionId);
+    const entry = await this.getEntry(sessionId);
 
-    if (!stored) {
+    if (!entry) {
       return null;
     }
+    const { stored, retired } = entry;
 
     // Check if token is expired or about to expire
     const now = new Date();
     const expiresAt = new Date(stored.expiresAt);
     const timeUntilExpiry = expiresAt.getTime() - now.getTime();
 
+    // A retired session is never refreshed: it only serves requests already in flight
+    if (retired) {
+      return timeUntilExpiry > 0 ? stored.tokens.accessToken : null;
+    }
+
     if (timeUntilExpiry < this.refreshThresholdMs) {
       console.error('[RedisTokenManager] Token for session is expiring soon, attempting refresh');
 
-      // Try to refresh the token
+      // Try to refresh the token. Use the refreshed token directly: if the session was
+      // retired while Cognito answered, it isn't written back but is still valid for this call.
       try {
-        await this.refreshTokenIfNeeded(sessionId);
-        const refreshedStored = await this.getStoredTokens(sessionId);
-        return refreshedStored?.tokens.accessToken || null;
+        const refreshed = await this.refreshAndStore(sessionId, stored);
+        return refreshed.accessToken;
       } catch (error) {
         console.error('[RedisTokenManager] Token refresh failed for session');
-        // Token refresh failed, return null to force re-authentication
-        await this.deleteTokens(sessionId);
+        // Token refresh failed, return null to force re-authentication. A session retired
+        // meanwhile is left to its grace period: requests already in flight can still use it.
+        if (!(await this.isRetired(sessionId))) {
+          await this.deleteTokens(sessionId);
+        }
         return null;
       }
     }
@@ -112,8 +133,14 @@ export class RedisTokenManager implements ITokenManager {
    * @returns OAuth tokens or null if not found
    */
   async getTokens(sessionId: string): Promise<OAuthTokens | null> {
-    const stored = await this.getStoredTokens(sessionId);
-    return stored?.tokens || null;
+    const entry = await this.getEntry(sessionId);
+    if (!entry) {
+      return null;
+    }
+    // expiresIn is what's left of the access token's lifetime, so tokens copied to a new
+    // session keep their real expiry
+    const expiresIn = Math.max(0, Math.floor((new Date(entry.stored.expiresAt).getTime() - Date.now()) / 1000));
+    return { ...entry.stored.tokens, expiresIn };
   }
 
   /**
@@ -121,22 +148,30 @@ export class RedisTokenManager implements ITokenManager {
    * @param sessionId Session identifier
    */
   async refreshTokenIfNeeded(sessionId: string): Promise<void> {
-    const stored = await this.getStoredTokens(sessionId);
+    const entry = await this.getEntry(sessionId);
 
-    if (!stored) {
+    if (!entry) {
       throw new Error('No tokens found for session');
     }
 
     const now = new Date();
-    const expiresAt = new Date(stored.expiresAt);
+    const expiresAt = new Date(entry.stored.expiresAt);
     const timeUntilExpiry = expiresAt.getTime() - now.getTime();
 
-    // Only refresh if about to expire
-    if (timeUntilExpiry >= this.refreshThresholdMs) {
+    // Only refresh if about to expire, and never a retired session
+    if (timeUntilExpiry >= this.refreshThresholdMs || entry.retired) {
       console.error('[RedisTokenManager] Token for session is still valid, no refresh needed');
       return;
     }
 
+    await this.refreshAndStore(sessionId, entry.stored);
+  }
+
+  /**
+   * Refreshes the Cognito tokens and stores them, unless the session has been retired
+   * meanwhile. Returns the refreshed tokens either way.
+   */
+  private async refreshAndStore(sessionId: string, stored: StoredTokens): Promise<OAuthTokens> {
     if (!stored.tokens.refreshToken) {
       throw new Error('No refresh token available for session');
     }
@@ -145,8 +180,16 @@ export class RedisTokenManager implements ITokenManager {
 
     try {
       const newTokens = await refreshAccessToken(this.config, stored.tokens.refreshToken);
+      if (await this.isRetired(sessionId)) {
+        console.error('[RedisTokenManager] Session was retired during refresh, not storing');
+        return newTokens;
+      }
       await this.storeTokens(sessionId, newTokens);
+      // The session may have been retired between the check and the write. If so, put the
+      // grace TTL back so the write doesn't revive it.
+      await this.capToRetiredTtl(sessionId);
       console.error('[RedisTokenManager] ✅ Successfully refreshed and stored Cognito tokens for session');
+      return newTokens;
     } catch (error) {
       console.error('[RedisTokenManager] ❌ Failed to refresh Cognito token for session');
       throw error;
@@ -159,9 +202,7 @@ export class RedisTokenManager implements ITokenManager {
    * @returns True if session has tokens
    */
   async hasTokens(sessionId: string): Promise<boolean> {
-    const key = this.getKey(sessionId);
-    const exists = await this.redis.exists(key);
-    return exists === 1;
+    return (await this.getEntry(sessionId)) !== null;
   }
 
   /**
@@ -170,8 +211,8 @@ export class RedisTokenManager implements ITokenManager {
    * @returns Expiry date or null if not found
    */
   async getTokenExpiry(sessionId: string): Promise<Date | null> {
-    const stored = await this.getStoredTokens(sessionId);
-    return stored ? new Date(stored.expiresAt) : null;
+    const entry = await this.getEntry(sessionId);
+    return entry ? new Date(entry.stored.expiresAt) : null;
   }
 
   /**
@@ -180,12 +221,12 @@ export class RedisTokenManager implements ITokenManager {
    * @returns True if expired
    */
   async isTokenExpired(sessionId: string): Promise<boolean> {
-    const stored = await this.getStoredTokens(sessionId);
-    if (!stored) {
+    const entry = await this.getEntry(sessionId);
+    if (!entry) {
       return true;
     }
 
-    return new Date() >= new Date(stored.expiresAt);
+    return new Date() >= new Date(entry.stored.expiresAt);
   }
 
   /**
@@ -196,6 +237,34 @@ export class RedisTokenManager implements ITokenManager {
     const key = this.getKey(sessionId);
     await this.redis.del(key);
     console.error('[RedisTokenManager] Deleted tokens for session');
+  }
+
+  /**
+   * Retires a session. The retired key holds the end of the grace period and outlives any
+   * token key written up to the deadline, so reads enforce the deadline even if a racing write
+   * or TTL extension outlives it. SET NX makes this atomic: only one caller can retire a session.
+   */
+  async retireTokens(sessionId: string, graceMs: number): Promise<boolean> {
+    const deadline = Date.now() + graceMs;
+    const retiredKey = this.getRetiredKey(sessionId);
+    const markerTtlMs = this.tokenTtlMs + graceMs + RETIRED_MARKER_MARGIN_MS;
+    const claimed = await this.redis.set(retiredKey, String(deadline), 'PX', markerTtlMs, 'NX');
+    if (claimed !== 'OK') {
+      return false;
+    }
+    try {
+      // pexpire returns 0 when the token key doesn't exist
+      return (await this.redis.pexpire(this.getKey(sessionId), graceMs)) === 1;
+    } catch (error) {
+      // Undo the retirement so the session isn't left retired with its full TTL; the caller
+      // fails and the client can retry with the same refresh token
+      await this.redis.del(retiredKey).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async isRetired(sessionId: string): Promise<boolean> {
+    return (await this.redis.exists(this.getRetiredKey(sessionId))) === 1;
   }
 
   /**
@@ -219,7 +288,10 @@ export class RedisTokenManager implements ITokenManager {
    * Clears all tokens (for testing or shutdown)
    */
   async clearAll(): Promise<void> {
-    const keys = await this.redis.keys(`${this.keyPrefix}*`);
+    const keys = [
+      ...(await this.redis.keys(`${this.keyPrefix}*`)),
+      ...(await this.redis.keys(`${this.retiredKeyPrefix}*`)),
+    ];
     if (keys.length > 0) {
       await this.redis.del(...keys);
       console.error(`[RedisTokenManager] Cleared all ${keys.length} session(s)`);
@@ -235,35 +307,69 @@ export class RedisTokenManager implements ITokenManager {
   }
 
   /**
-   * Private helper to get stored tokens from Redis
+   * Private helper to get stored tokens from Redis, with whether the session is retired.
+   * A retired session past its grace period is deleted and reported as missing.
    */
-  private async getStoredTokens(sessionId: string): Promise<StoredTokens | null> {
+  private async getEntry(sessionId: string): Promise<{ stored: StoredTokens; retired: boolean } | null> {
     const key = this.getKey(sessionId);
-    const data = await this.redis.get(key);
+    const [data, retiredUntil] = await this.redis.mget(key, this.getRetiredKey(sessionId));
 
     if (!data) {
+      return null;
+    }
+
+    if (retiredUntil !== null && Date.now() >= Number(retiredUntil)) {
+      await this.redis.del(key);
+      return null;
+    }
+
+    let stored: StoredTokens;
+    try {
+      stored = JSON.parse(data) as StoredTokens;
+    } catch (error) {
+      console.error('[RedisTokenManager] Failed to parse stored tokens for session');
       return null;
     }
 
     // Sliding expiration: only storeTokens() used to extend the TTL, and that runs just
     // once an hour when the Cognito token is renewed. A session in continuous use could
     // therefore still hit the TTL and drop mid-conversation. Every read pushes it out.
-    await this.touch(key);
+    // Retired sessions keep their short grace TTL.
+    const retired = retiredUntil !== null;
+    if (!retired) {
+      await this.touch(sessionId);
+    }
 
-    try {
-      return JSON.parse(data) as StoredTokens;
-    } catch (error) {
-      console.error('[RedisTokenManager] Failed to parse stored tokens for session');
-      return null;
+    return { stored, retired };
+  }
+
+  /**
+   * After a write that may have raced with retireTokens(), cuts the token key's TTL back to
+   * whatever is left of the grace period.
+   */
+  private async capToRetiredTtl(sessionId: string): Promise<void> {
+    const retiredUntil = await this.redis.get(this.getRetiredKey(sessionId));
+    if (retiredUntil !== null) {
+      await this.redis.pexpire(this.getKey(sessionId), Math.max(1, Number(retiredUntil) - Date.now()));
     }
   }
 
   /**
-   * Extends the TTL of an existing token key
+   * Extends the TTL of an existing token key. The session may have been retired since it was
+   * read; the retired marker is read in the same transaction, and if it's there the grace TTL
+   * is put back so the extension doesn't keep a retired key around for the full TTL.
    */
-  private async touch(key: string): Promise<void> {
+  private async touch(sessionId: string): Promise<void> {
     try {
-      await this.redis.expire(key, Math.floor(this.tokenTtlMs / 1000));
+      const results = await this.redis
+        .multi()
+        .expire(this.getKey(sessionId), Math.floor(this.tokenTtlMs / 1000))
+        .get(this.getRetiredKey(sessionId))
+        .exec();
+      const retiredUntil = results?.[1]?.[1];
+      if (typeof retiredUntil === 'string') {
+        await this.redis.pexpire(this.getKey(sessionId), Math.max(1, Number(retiredUntil) - Date.now()));
+      }
     } catch (error) {
       // A failed TTL extension must not fail the request - the key is still valid.
       console.error('[RedisTokenManager] Failed to extend TTL for token key');
@@ -275,5 +381,9 @@ export class RedisTokenManager implements ITokenManager {
    */
   private getKey(sessionId: string): string {
     return `${this.keyPrefix}${sessionId}`;
+  }
+
+  private getRetiredKey(sessionId: string): string {
+    return `${this.retiredKeyPrefix}${sessionId}`;
   }
 }

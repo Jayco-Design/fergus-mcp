@@ -11,6 +11,8 @@ interface StoredTokens {
   tokens: OAuthTokens;
   expiresAt: Date;
   createdAt: Date;
+  /** Set when the session was rotated out; the tokens stop working after this time. */
+  retiredUntil?: Date;
 }
 
 /**
@@ -49,7 +51,7 @@ export class TokenManager implements ITokenManager {
    * @returns Access token or null if session not found
    */
   async getAccessToken(sessionId: string): Promise<string | null> {
-    const stored = this.storage.get(sessionId);
+    const stored = this.getLive(sessionId);
 
     if (!stored) {
       return null;
@@ -59,18 +61,26 @@ export class TokenManager implements ITokenManager {
     const now = new Date();
     const timeUntilExpiry = stored.expiresAt.getTime() - now.getTime();
 
+    // A retired session is never refreshed: it only serves requests already in flight
+    if (stored.retiredUntil) {
+      return timeUntilExpiry > 0 ? stored.tokens.accessToken : null;
+    }
+
     if (timeUntilExpiry < this.refreshThresholdMs) {
       console.error('[TokenManager] Token for session is expiring soon, attempting refresh');
 
-      // Try to refresh the token
+      // Try to refresh the token. Use the refreshed token directly: if the session was
+      // retired while Cognito answered, it isn't written back but is still valid for this call.
       try {
-        await this.refreshTokenIfNeeded(sessionId);
-        const refreshedStored = this.storage.get(sessionId);
-        return refreshedStored?.tokens.accessToken || null;
+        const refreshed = await this.refreshAndStore(sessionId, stored);
+        return refreshed.accessToken;
       } catch (error) {
         console.error('[TokenManager] Token refresh failed for session');
-        // Token refresh failed, return null to force re-authentication
-        this.deleteTokens(sessionId);
+        // Token refresh failed, return null to force re-authentication. A session retired
+        // meanwhile is left to its grace period: requests already in flight can still use it.
+        if (!this.storage.get(sessionId)?.retiredUntil) {
+          this.deleteTokens(sessionId);
+        }
         return null;
       }
     }
@@ -84,8 +94,14 @@ export class TokenManager implements ITokenManager {
    * @returns OAuth tokens or null if not found
    */
   getTokens(sessionId: string): OAuthTokens | null {
-    const stored = this.storage.get(sessionId);
-    return stored?.tokens || null;
+    const stored = this.getLive(sessionId);
+    if (!stored) {
+      return null;
+    }
+    // expiresIn is what's left of the access token's lifetime, so tokens copied to a new
+    // session keep their real expiry
+    const expiresIn = Math.max(0, Math.floor((stored.expiresAt.getTime() - Date.now()) / 1000));
+    return { ...stored.tokens, expiresIn };
   }
 
   /**
@@ -102,12 +118,20 @@ export class TokenManager implements ITokenManager {
     const now = new Date();
     const timeUntilExpiry = stored.expiresAt.getTime() - now.getTime();
 
-    // Only refresh if about to expire
-    if (timeUntilExpiry >= this.refreshThresholdMs) {
+    // Only refresh if about to expire, and never a retired session
+    if (timeUntilExpiry >= this.refreshThresholdMs || stored.retiredUntil) {
       console.error('[TokenManager] Token for session is still valid, no refresh needed');
       return;
     }
 
+    await this.refreshAndStore(sessionId, stored);
+  }
+
+  /**
+   * Refreshes the Cognito tokens and stores them, unless the session has been retired or
+   * removed meanwhile. Returns the refreshed tokens either way.
+   */
+  private async refreshAndStore(sessionId: string, stored: StoredTokens): Promise<OAuthTokens> {
     if (!stored.tokens.refreshToken) {
       throw new Error('No refresh token available for session');
     }
@@ -116,8 +140,12 @@ export class TokenManager implements ITokenManager {
 
     try {
       const newTokens = await refreshAccessToken(this.config, stored.tokens.refreshToken);
-      this.storeTokens(sessionId, newTokens);
-      console.error('[TokenManager] Successfully refreshed tokens for session');
+      const current = this.storage.get(sessionId);
+      if (current && !current.retiredUntil) {
+        this.storeTokens(sessionId, newTokens);
+        console.error('[TokenManager] Successfully refreshed tokens for session');
+      }
+      return newTokens;
     } catch (error) {
       console.error('[TokenManager] Failed to refresh token for session');
       throw error;
@@ -130,7 +158,7 @@ export class TokenManager implements ITokenManager {
    * @returns True if session has tokens
    */
   hasTokens(sessionId: string): boolean {
-    return this.storage.has(sessionId);
+    return this.getLive(sessionId) !== undefined;
   }
 
   /**
@@ -164,6 +192,36 @@ export class TokenManager implements ITokenManager {
   deleteTokens(sessionId: string): void {
     this.storage.delete(sessionId);
     console.error('[TokenManager] Deleted tokens for session');
+  }
+
+  retireTokens(sessionId: string, graceMs: number): boolean {
+    const stored = this.getLive(sessionId);
+    if (!stored || stored.retiredUntil) {
+      return false;
+    }
+    stored.retiredUntil = new Date(Date.now() + graceMs);
+    // Drop the entry when the grace period ends, even if nothing reads it again. Timers can
+    // fire a moment before Date.now() reaches the deadline, so don't re-check it here.
+    setTimeout(() => {
+      if (this.storage.get(sessionId) === stored) {
+        this.storage.delete(sessionId);
+      }
+    }, graceMs).unref();
+    return true;
+  }
+
+  isRetired(sessionId: string): boolean {
+    return this.storage.get(sessionId)?.retiredUntil !== undefined;
+  }
+
+  /** Returns stored tokens unless they were retired and their grace period has passed. */
+  private getLive(sessionId: string): StoredTokens | undefined {
+    const stored = this.storage.get(sessionId);
+    if (stored?.retiredUntil && Date.now() >= stored.retiredUntil.getTime()) {
+      this.storage.delete(sessionId);
+      return undefined;
+    }
+    return stored;
   }
 
   /**
