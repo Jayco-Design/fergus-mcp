@@ -2,7 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { SessionManager } from '../session-manager.js';
 
-const transport = {} as any;
+const transport = { close: async () => undefined } as any;
 const fergusClient = {} as any;
 
 describe('SessionManager OAuth bindings', () => {
@@ -35,5 +35,53 @@ describe('SessionManager OAuth bindings', () => {
 
   test('bindOAuthSessionId returns false for an unknown MCP session', () => {
     assert.equal(sessions.bindOAuthSessionId('missing', 'login-1'), false);
+  });
+});
+
+describe('SessionManager session deletion', () => {
+  let sessions: SessionManager;
+
+  beforeEach(() => {
+    sessions = new SessionManager({ timeoutMs: 60_000, tokenTtlMs: 60_000, storage: 'memory' });
+  });
+
+  afterEach(() => {
+    sessions.shutdown();
+  });
+
+  test('deleteSession closes the transport', () => {
+    let closed = 0;
+    const closable = { close: async () => { closed++; } } as any;
+    sessions.createSession('mcp-1', closable, fergusClient);
+
+    sessions.deleteSession('mcp-1');
+
+    assert.equal(closed, 1);
+    assert.equal(sessions.hasSession('mcp-1'), false);
+  });
+
+  test('a transport whose close handler deletes the session is closed once', () => {
+    let closed = 0;
+    const closable = {
+      close: async () => {
+        closed++;
+        sessions.deleteSession('mcp-1');
+      },
+    } as any;
+    sessions.createSession('mcp-1', closable, fergusClient);
+
+    sessions.deleteSession('mcp-1');
+
+    assert.equal(closed, 1);
+  });
+
+  test('sessions idle for longer than the timeout have their transport closed', () => {
+    let closed = 0;
+    const closable = { close: async () => { closed++; } } as any;
+    sessions.createSession('mcp-1', closable, fergusClient);
+    sessions.getSession('mcp-1')!.lastAccessedAt = new Date(Date.now() - 120_000);
+
+    assert.equal(sessions.cleanupInactiveSessions(), 1);
+    assert.equal(closed, 1);
   });
 });

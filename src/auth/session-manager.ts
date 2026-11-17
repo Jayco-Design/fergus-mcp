@@ -133,19 +133,22 @@ export class SessionManager {
    */
   deleteSession(sessionId: string): void {
     const session = this.sessions.get(sessionId);
-
-    if (session) {
-      // Close the transport if possible
-      try {
-        // Note: StreamableHTTPServerTransport doesn't have an explicit close method
-        // The transport will be garbage collected when the session is deleted
-      } catch (error) {
-        console.error('[SessionManager] Error closing transport for session');
-      }
-
-      this.sessions.delete(sessionId);
-      console.error('[SessionManager] Deleted session');
+    if (!session) {
+      return;
     }
+
+    // Remove the entry first: closing the transport runs its onclose handler, which calls
+    // back into deleteSession.
+    this.sessions.delete(sessionId);
+
+    // Close the transport so its open SSE streams end and their keep-alive timers stop.
+    // Those timers keep the transport, and everything it references, in memory for as long
+    // as they run, so dropping the map entry alone does not release the session.
+    session.transport.close().catch(() => {
+      console.error('[SessionManager] Error closing transport for session');
+    });
+
+    console.error('[SessionManager] Deleted session');
   }
 
   /**
