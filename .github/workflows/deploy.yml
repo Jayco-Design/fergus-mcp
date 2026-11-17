@@ -1,19 +1,23 @@
-name: Build and publish Docker image
+name: Build and deploy
 
 on:
   push:
     branches:
       - main
 
+# Runs go one at a time, in order. A newer merge waits for the run in progress instead of
+# cancelling it part-way through a deployment.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-image:
     name: "Build and Push Image"
     if: github.repository_owner == 'Jayco-Design'
     runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    outputs:
+      version: ${{ steps.version.outputs.short_sha }}
     steps:
       - name: Code Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -53,3 +57,79 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.short_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Puts the image that was just built into service. Only the image and the version it
+  # reports change: the rest of the task definition (sizing, environment, secrets) is
+  # copied from the one currently running.
+  deploy:
+    name: "Deploy"
+    needs: build-image
+    if: github.repository_owner == 'Jayco-Design'
+    runs-on: ubuntu-latest
+    # Do not add `environment:` to this job. The deploy role trusts workflow runs on the
+    # main branch, and an environment changes the identity GitHub presents to AWS.
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+      VERSION: ${{ needs.build-image.outputs.version }}
+    steps:
+      # Short-lived credentials from GitHub's OIDC token; no AWS keys are stored
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.GH_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      # The task definition is written to a file and never printed: this repository's
+      # workflow logs are public.
+      - name: Download the running task definition
+        run: |
+          task_definition=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          aws ecs describe-task-definition \
+            --task-definition "$task_definition" \
+            --query taskDefinition > "$RUNNER_TEMP/task-definition.json"
+
+      - name: Set the new image and version
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@138c24f321fdbdf7edee4a685519d253cae2cdea # v1.9.0
+        with:
+          task-definition: ${{ runner.temp }}/task-definition.json
+          container-name: mcp
+          image: docker.io/fergusapp/mcp:${{ needs.build-image.outputs.version }}
+          environment-variables: |
+            VERSION=${{ needs.build-image.outputs.version }}
+            DD_VERSION=${{ needs.build-image.outputs.version }}
+            DD_GIT_COMMIT_SHA=${{ github.sha }}
+          docker-labels: |
+            com.datadoghq.tags.version=${{ needs.build-image.outputs.version }}
+
+      - name: Deploy
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@c465972ecbd160473f22e683363b422a5412a3de # v2.6.3
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ secrets.ECS_CLUSTER }}
+          service: ${{ secrets.ECS_SERVICE }}
+          wait-for-service-stability: true
+          wait-for-minutes: 15
+
+      # A service also counts as stable after ECS has rolled a failed deployment back to
+      # the previous version, so check which version it settled on.
+      - name: Check the new version is running
+        env:
+          DEPLOYED: ${{ steps.deploy.outputs.task-definition-arn }}
+        run: |
+          running=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          if [ "$running" != "$DEPLOYED" ]; then
+            echo "::error::The service is not running version $VERSION. ECS rolls a deployment back when its tasks fail to start or fail their health checks."
+            exit 1
+          fi
+          echo "Version $VERSION is running"
