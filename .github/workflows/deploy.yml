@@ -1,8 +1,9 @@
 name: Build and publish Docker image
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +17,11 @@ jobs:
     steps:
       - name: Code Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # Every image is identified by the commit it was built from
+      - name: Image version
+        id: version
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Docker Login
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -34,7 +40,7 @@ jobs:
           pull: true
           push: true
           tags: |
-            fergusapp/mcp:${{ github.event.release.tag_name }}
+            fergusapp/mcp:${{ steps.version.outputs.short_sha }}
             fergusapp/mcp:latest
           labels: |
             org.opencontainers.image.description=Fergus MCP Server
@@ -43,6 +49,7 @@ jobs:
             org.opencontainers.image.title=Fergus MCP Server
             org.opencontainers.image.url=https://github.com/fergusapp/fergus-mcp
             org.opencontainers.image.vendor=Fergus
-            org.opencontainers.image.version=${{ github.event.release.tag_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.short_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

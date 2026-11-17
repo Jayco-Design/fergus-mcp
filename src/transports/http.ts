@@ -771,6 +771,13 @@ export function createHttpOAuthApp(config: HttpOAuthConfig, deps: HttpOAuthAppDe
       return;
     }
 
+    // The client may have disconnected while the token was being checked. The transport
+    // would still register the stream, but nothing would read it or ever cancel it, so it
+    // would stay open and block the session's one standalone stream. Don't open it.
+    if (res.destroyed) {
+      return;
+    }
+
     sessionManager.updateLastAccessed(sessionId);
     await requestOAuthSession.run(oauthSessionId, () => session.transport.handleRequest(req, res));
   };
